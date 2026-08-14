@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{E5B3A8C1-1A2B-4C3D-9E6F-7A8B9C0D1E2F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{A1B2C3D4-1234-5678-9ABC-DEF012345678}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Main.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="App.xaml.cpp"><Filter>UI</Filter></ClCompile>
+    <ClCompile Include="MainWindow.xaml.cpp"><Filter>UI</Filter></ClCompile>
+    <ClCompile Include="core\CommandRunner.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\TcpOptimizer.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\DnsOptimizer.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\QoSManager.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\AdapterOptimizer.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\NetworkDiagnostics.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\ProfileManager.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="core\NetworkOptimizationEngine.cpp"><Filter>Core</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="App.xaml.h"><Filter>UI</Filter></ClInclude>
+    <ClInclude Include="MainWindow.xaml.h"><Filter>UI</Filter></ClInclude>
+    <ClInclude Include="core\Types.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\CommandRunner.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\TcpOptimizer.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\DnsOptimizer.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\QoSManager.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\AdapterOptimizer.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\NetworkDiagnostics.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\ProfileManager.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="core\NetworkOptimizationEngine.h"><Filter>Core</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml"><Filter>UI</Filter></ApplicationDefinition>
+    <Page Include="MainWindow.xaml"><Filter>UI</Filter></Page>
+  </ItemGroup>
+</Project>

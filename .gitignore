@@ -1,0 +1,27 @@
+# Build outputs
+*.exe
+*.dll
+*.obj
+*.pdb
+
+# Logs
+*.log
+debug.log
+
+# Backups
+*.before_new_features.*
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# Build directories
+x64/
+Debug/
+Release/
+build/
+
+# Temp files
+*.tmp
+*.bak
