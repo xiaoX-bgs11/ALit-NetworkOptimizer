@@ -4632,57 +4632,6 @@ $window.FindName("BtnWdStart").Add_Click({
     $udpPortBox = $window.FindName("WdUdpPort")
     $dscpBox = $window.FindName("WdDscp")
     $modeBox = $window.FindName("WdModeLabel")
-    # 账号密码验证
-    if (-not $script:wdAuthed) {
-        $authWin = New-Object System.Windows.Window
-        $authWin.WindowStyle = "None"
-        $authWin.AllowsTransparency = $true
-        $authWin.Background = [System.Windows.Media.Brushes]::Transparent
-        $authWin.WindowStartupLocation = "CenterScreen"
-        $authWin.Width = 360; $authWin.Height = 260
-        $authWin.ResizeMode = "NoResize"
-        $authXaml = @"
-<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Background="#1E1E1E" CornerRadius="12" BorderBrush="#3A3A3A" BorderThickness="1">
-  <StackPanel Margin="24,20,24,20">
-    <TextBlock Text="WinDivert 授权验证" FontSize="18" FontWeight="Bold" Foreground="#E8E8E8"
-               HorizontalAlignment="Center" Margin="0,0,0,16" FontFamily="HarmonyOS Sans SC, Microsoft YaHei"/>
-    <TextBlock Text="用户名" FontSize="12" Foreground="#888888" Margin="0,0,0,4"/>
-    <TextBox x:Name="AuthUser" FontSize="14" Padding="8,6" Background="#2A2A2A" Foreground="#E8E8E8"
-             BorderBrush="#444444" BorderThickness="1" CaretBrush="#7CC7FF"/>
-    <TextBlock Text="密码" FontSize="12" Foreground="#888888" Margin="0,10,0,4"/>
-    <PasswordBox x:Name="AuthPass" FontSize="14" Padding="8,6" Background="#2A2A2A" Foreground="#E8E8E8"
-                 BorderBrush="#444444" BorderThickness="1" CaretBrush="#7CC7FF"/>
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
-      <Button x:Name="AuthOK" Content="确认" Width="100" Height="32" Margin="0,0,10,0"
-              Background="#4A9EFF" Foreground="White" BorderThickness="0" FontSize="13"/>
-      <Button x:Name="AuthCancel" Content="取消" Width="100" Height="32"
-              Background="#3A3A3A" Foreground="#E8E8E8" BorderThickness="0" FontSize="13"/>
-    </StackPanel>
-  </StackPanel>
-</Border>
-"@
-        $authRoot = [System.Windows.Markup.XamlReader]::Parse($authXaml)
-        $authWin.Content = $authRoot
-        $authUser = $authRoot.FindName("AuthUser")
-        $authPass = $authRoot.FindName("AuthPass")
-        $authOK = $authRoot.FindName("AuthOK")
-        $authCancel = $authRoot.FindName("AuthCancel")
-        $authResult = $false
-        $authOK.Add_Click({
-            if ($authUser.Text -eq "xiaoX" -and $authPass.Password -eq "1145145") {
-                $script:wdAuthed = $true
-                $authWin.DialogResult = $true
-                $authWin.Close()
-            } else {
-                [System.Windows.MessageBox]::Show("用户名或密码错误", "验证失败", "OK", "Warning") | Out-Null
-            }
-        })
-        $authCancel.Add_Click({ $authWin.DialogResult = $false; $authWin.Close() })
-        $authWin.ShowDialog() | Out-Null
-        if (-not $script:wdAuthed) { return }
-    }
     try {
     $warn = @"
 [WinDivert 内核级逐包优化 - 警告声明]
