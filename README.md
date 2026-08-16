@@ -2,12 +2,12 @@
 
 Minecraft PvP 网络优化器 & 本地网络优化工具，基于 C++ 和 WinUI 3 构建。
 
-所有优化均使用 Microsoft 官方文档记载的 Windows 网络参数。
+所有优化均使用 Microsoft 官方文档记载的 Windows 网络参数，无任何"玄学"代码。
 
-功能概述
+## 功能概述
 
-TCP/IP 协议栈优化
-- **TcpNoDelay = 1**：禁用 Nagle 算法，消除小数据包延迟合并
+### TCP/IP 协议栈优化
+- **TcpNoDelay = 1**：禁用 Nagle 算法，消除小数据包延迟合并（PvP 最关键优化）
 - **TcpAckFrequency = 1**：每收到一个 TCP 段立即发送 ACK，加速拥塞窗口更新
 - **TCP Auto-Tuning**：设置为 normal，允许动态调整接收窗口
 - **ECN**：启用显式拥塞通知，减少丢包重传
@@ -15,32 +15,22 @@ TCP/IP 协议栈优化
 - **CTCP 拥塞控制**：Compound TCP，高延迟链路下更好的吞吐量
 - **Initial RTO = 300ms**：降低初始重传超时，加快连接建立
 
-系统级优化
+### 系统级优化
 - **NetworkThrottlingIndex = 0xFFFFFFFF**：禁用多媒体类调度器的网络限流
 - **SystemResponsiveness = 0**：将最大 CPU 资源分配给游戏
 - **Games Task 优先级提升**：GPU Priority=8, Priority=6, Scheduling=High, SFIO=High
 
-QoS 流量优先级
+### QoS 流量优先级
 - 为 Minecraft Java（javaw.exe）创建 DSCP 46 (EF) 策略
 - 为 Minecraft 基岩版（Minecraft.Windows.exe）创建 DSCP 46 策略
 - 为端口 25565（Java 默认）和 19132（基岩版 UDP）创建端口级 QoS 策略
-- 为 FPS 游戏进程（CS2/Valorant/Apex/CoD/PUBG/R6）创建 DSCP 46 策略
-- 为 FPS 游戏端口（27015/7448/37015/3074/6015 UDP）创建端口级 QoS 策略
 
-FPS 游戏子弹命中优化
-- **WinDivert UDP FEC**：急速模式即启用 UDP 前向纠错冗余复制，提升抗丢包能力
-- **小 UDP 包优先标记**：< 512B 的 UDP 游戏数据包在所有模式自动 DSCP 标记
-- **TCP Fast Open**：降低首包延迟
-- **TcpMaxDataRetransmissions = 2**：减少重传等待时间
-- **DefaultTTL = 64**：标准跳数优化
-- 支持 CS2、Valorant、Apex Legends、Call of Duty、PUBG、Rainbow Six Siege 端口预设
-
-DNS 优化
+### DNS 优化
 - 支持 Cloudflare、Google、AliDNS、114DNS、DNSPod 等预设
 - DNS 基准测试（自动选择最低延迟的 DNS）
 - 一键刷新 DNS 缓存
 
-网络适配器优化
+### 网络适配器优化
 - 禁用适配器电源管理（防止休眠中断连接）
 - 增大接收/发送缓冲区至 2048
 - 启用 RSS（接收端缩放）
@@ -48,7 +38,7 @@ DNS 优化
 - 禁用中断节流（Interrupt Moderation）降低延迟
 - MTU 优化
 
- 网络诊断
+### 网络诊断
 - 实时带宽监控（上传/下载速率）
 - ICMP Ping 延迟测量（原生 IcmpSendEcho）
 - 抖动（Jitter）和丢包率测量
@@ -57,21 +47,21 @@ DNS 优化
 
 ## 构建要求
 
-必需环境
+### 必需环境
 - **Visual Studio 2022**（Community/Professional/Enterprise 均可）
   - 安装时勾选工作负载：**使用 C++ 的桌面开发**
   - 在"单个组件"中勾选：**Windows 11 SDK (10.0.22621+)** 或 **Windows 10 SDK (10.0.19041+)**
 - **Windows App SDK 1.6+**（通过 NuGet 自动还原）
 - Windows 10 19041+ 或 Windows 11
 
-NuGet 包（自动还原）
+### NuGet 包（自动还原）
 | 包名 | 版本 | 用途 |
 |------|------|------|
 | Microsoft.WindowsAppSDK | 1.6.250108002 | WinUI 3 框架 |
 | Microsoft.Windows.CppWinRT | 2.0.240405.15 | C++/WinRT 支持 |
 | Microsoft.Windows.ImplementationLibrary | 1.0.240803.1 | WIL 辅助库 |
 
-构建步骤
+## 构建步骤
 
 1. **安装 Visual Studio 2022**
    - 下载：https://visualstudio.microsoft.com/zh-hans/vs/

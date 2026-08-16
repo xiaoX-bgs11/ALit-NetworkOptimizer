@@ -1,58 +1,35 @@
-﻿<#
-.SYNOPSIS
-    Network Optimizer v3 - PowerShell WPF GUI
-    Minecraft PvP & Local Network Optimization
-.DESCRIPTION
-    Provides a GUI interface for applying real Windows network optimizations.
-    All settings are documented Microsoft parameters - no pseudo-science.
-    This is the runnable version of the C++ WinUI3 project.
-#>
-
+﻿
 #requires -Version 5.1
-
-# ============================================================
-# Load WPF Assemblies (must load before admin check uses MessageBox)
-# ============================================================
+$ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
 $PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-
-# ============================================================
-# Admin Check
-# ============================================================
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $msg = "ALit-网络优化工具V3需要管理员权限才能修改网络设置。`n`n是否以管理员身份重新启动？"
     $result = [System.Windows.MessageBox]::Show($msg, "需要管理员权限", "YesNo", "Warning")
     if ($result -eq "Yes") {
         $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-        $isPackaged = ($exePath -notmatch 'powershell\.exe$' -and $exePath -notmatch 'pwsh\.exe$')
-        if ($isPackaged) {
-            Start-Process -FilePath $exePath -Verb RunAs
-        } else {
-            Start-Process $PowerShellExe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -STA -File `"$PSCommandPath`"" -Verb RunAs
-        }
+        Start-Process -FilePath $exePath -Verb RunAs
         [Environment]::Exit(0)
     }
     exit
 }
-
-# ============================================================
-# Splash Screen (加载页面)
-# ============================================================
 $script:splashAccent = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.ColorConverter]::ConvertFromString("#4A9EFF"))
 $script:splashDim = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.ColorConverter]::ConvertFromString("#333333"))
-
 $splashXaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        Background="#1E1E1E"
         WindowStartupLocation="CenterScreen"
         Width="400" Height="220"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
-    <Border Background="#1E1E1E" CornerRadius="12" BorderBrush="#2A2A2A" BorderThickness="1">
+<WindowChrome.WindowChrome>
+    <shell:WindowChrome GlassFrameThickness="0" ResizeBorderThickness="0" CaptionHeight="0" CornerRadius="12"/>
+</WindowChrome.WindowChrome>
+    <Border Background="#1E1E1E" CornerRadius="12" BorderThickness="0">
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
             <TextBlock Text="ALit-网络优化工具V3" FontSize="24" FontWeight="Bold" Foreground="#E8E8E8"
                        HorizontalAlignment="Center" FontFamily="HarmonyOS Sans SC, Microsoft YaHei"/>
@@ -69,14 +46,11 @@ $splashXaml = @"
     </Border>
 </Window>
 "@
-
 $splashWindow = [Windows.Markup.XamlReader]::Parse($splashXaml)
 $splashWindow.Show()
 [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, 'Background')
 Start-Sleep -Milliseconds 80
 [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, 'Background')
-
-# 加载动画
 $script:splashDotIndex = 0
 $script:splashTimer = New-Object System.Windows.Threading.DispatcherTimer
 $script:splashTimer.Interval = [TimeSpan]::FromMilliseconds(220)
@@ -91,7 +65,6 @@ $script:splashTimer.Add_Tick({
     } catch {}
 })
 $script:splashTimer.Start()
-
 function Update-SplashText {
     param([string]$Text)
     try {
@@ -99,11 +72,6 @@ function Update-SplashText {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, 'Background')
     } catch {}
 }
-
-# ============================================================
-# Helper Functions
-# ============================================================
-
 function Invoke-Command {
     param([string]$Command)
     $p = New-Object System.Diagnostics.Process
@@ -118,7 +86,6 @@ function Invoke-Command {
     $p.WaitForExit(30000) | Out-Null
     return @{ Output = $output; ExitCode = $p.ExitCode }
 }
-
 function Invoke-PowerShell {
     param([string]$Script)
     $p = New-Object System.Diagnostics.Process
@@ -133,11 +100,9 @@ function Invoke-PowerShell {
     $p.WaitForExit(30000) | Out-Null
     return @{ Output = $output; ExitCode = $p.ExitCode }
 }
-
-$script:stateDir = Join-Path $env:ProgramData "ALitNetworkOptimizer"
+$script:stateDir = Join-Path "C:\ProgramData" "ALitNetworkOptimizer"
 $script:stateFile = Join-Path $script:stateDir "optimization-state.json"
 $script:stateRegPath = "HKLM:\SOFTWARE\ALitNetworkOptimizer"
-
 function Save-OptimizationState {
     param(
         [string]$Mode,
@@ -165,7 +130,6 @@ function Save-OptimizationState {
         Add-LogEntry "WARN" "保存优化状态失败：$($_.Exception.Message)"
     }
 }
-
 function Clear-OptimizationState {
     try {
         if (Test-Path $script:stateFile) {
@@ -178,7 +142,6 @@ function Clear-OptimizationState {
         Add-LogEntry "WARN" "清理优化状态失败：$($_.Exception.Message)"
     }
 }
-
 function Get-SavedOptimizationState {
     try {
         if (Test-Path $script:stateRegPath) {
@@ -200,27 +163,29 @@ function Get-SavedOptimizationState {
     }
     return $null
 }
-
 function Test-OptimizationApplied {
     try {
         $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
         $tcpPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
         $sp = Get-ItemProperty -Path $spPath -ErrorAction SilentlyContinue
         $tcp = Get-ItemProperty -Path $tcpPath -ErrorAction SilentlyContinue
-
-        $balancedLike = ($sp.SystemResponsiveness -eq 10) -and ($tcp.Tcp1323Opts -eq 1 -or $tcp.MaxUserPort -ge 60000)
+        $indicators = 0
+        if ($sp.SystemResponsiveness -eq 10) { $indicators++ }
+        if ($tcp.Tcp1323Opts -eq 1) { $indicators++ }
+        if ($tcp.MaxUserPort -ge 60000) { $indicators++ }
         $nti = [int64]$sp.NetworkThrottlingIndex
-        $normalLike = ($nti -eq 4294967295 -or $nti -eq -1) -or ($sp.SystemResponsiveness -eq 0) -or ($tcp.TcpNoDelay -eq 1) -or ($tcp.EnableTCPNoDelay -eq 1) -or ($tcp.TcpAckFrequency -eq 1) -or ($tcp.TcpDelAckTicks -eq 0) -or ($tcp.EnableTCPChimney -eq 0) -or ($tcp.KeepAliveTime -le 300000)
-        return ($balancedLike -or $normalLike)
+        if ($nti -eq 4294967295 -or $nti -eq -1) { $indicators++ }
+        if ($tcp.TcpNoDelay -eq 1 -or $tcp.EnableTCPNoDelay -eq 1) { $indicators++ }
+        if ($tcp.TcpAckFrequency -eq 1) { $indicators++ }
+        if ($tcp.TcpDelAckTicks -eq 0) { $indicators++ }
+        return ($indicators -ge 3)
     } catch {
         return $false
     }
 }
-
 function Refresh-OptimizationStatus {
     $sidebar = $window.FindName("SidebarStatus")
     if (-not $sidebar) { return }
-
     $state = Get-SavedOptimizationState
     if ($state -and $state.IsOptimized) {
         $displayName = if ($state.DisplayName) { [string]$state.DisplayName } else { "已优化" }
@@ -228,7 +193,6 @@ function Refresh-OptimizationStatus {
         $sidebar.Foreground = "#7CC7FF"
         return
     }
-
     if (Test-OptimizationApplied) {
         $sidebar.Text = "已优化"
         $sidebar.Foreground = "#7CC7FF"
@@ -237,7 +201,6 @@ function Refresh-OptimizationStatus {
         $sidebar.Foreground = "#FFB74D"
     }
 }
-
 function Get-ActiveAdapters {
     $result = Invoke-PowerShell "Get-NetAdapter | Where-Object { `$_.Status -eq 'Up' } | ForEach-Object { `$_.Name + '|' + `$_.InterfaceDescription + '|' + `$_.LinkSpeed + '|' + `$_.MtuSize }"
     $adapters = @()
@@ -255,7 +218,6 @@ function Get-ActiveAdapters {
     }
     return $adapters
 }
-
 function Measure-PingLatency {
     param([string]$TargetHost, [int]$Count = 5)
     $result = Invoke-Command "ping -n $Count $TargetHost"
@@ -266,7 +228,6 @@ function Measure-PingLatency {
     }
     return -1
 }
-
 function Measure-HttpLatency {
     param([string]$Url, [int]$TimeoutSeconds = 5)
     try {
@@ -285,7 +246,6 @@ function Measure-HttpLatency {
         return -1
     }
 }
-
 function Get-InterfaceBytes {
     param([string]$InterfaceName)
     try {
@@ -303,13 +263,8 @@ function Get-InterfaceBytes {
     }
     return $null
 }
-
-# ============================================================
-# Snapshot System - 优化前保存原始配置
-# ============================================================
-$script:snapshotDir = Join-Path $env:ProgramData "ALitNetworkOptimizer\snapshots"
+$script:snapshotDir = Join-Path "C:\ProgramData" "ALitNetworkOptimizer\snapshots"
 $script:latestSnapshot = $null
-
 function Save-PreOptimizationSnapshot {
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $snapDir = Join-Path $script:snapshotDir $timestamp
@@ -320,17 +275,12 @@ function Save-PreOptimizationSnapshot {
         Add-LogEntry "ERROR" "无法创建快照目录：$($_.Exception.Message)"
         return $null
     }
-
     $snap = @{ Timestamp = $timestamp; Path = $snapDir; Items = @() }
-
-    # 1. TCP 全局设置
     try {
         $tcpGlobal = (Invoke-Command "netsh interface tcp show global").Output
         [System.IO.File]::WriteAllText((Join-Path $snapDir "tcp_global.txt"), $tcpGlobal, [System.Text.Encoding]::UTF8)
         $snap.Items += "TCP 全局设置"
     } catch { Add-LogEntry "WARN" "快照 TCP 全局失败" }
-
-    # 2. DNS 服务器（每网卡）
     try {
         $dnsSnapshot = @()
         $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
@@ -341,15 +291,11 @@ function Save-PreOptimizationSnapshot {
         [System.IO.File]::WriteAllLines((Join-Path $snapDir "dns.txt"), $dnsSnapshot, [System.Text.Encoding]::UTF8)
         $snap.Items += "DNS 服务器（$($adapters.Count) 个网卡）"
     } catch { Add-LogEntry "WARN" "快照 DNS 失败" }
-
-    # 3. QoS 策略
     try {
         $qosOut = (Invoke-Command "netsh qos show policy").Output
         [System.IO.File]::WriteAllText((Join-Path $snapDir "qos.txt"), $qosOut, [System.Text.Encoding]::UTF8)
         $snap.Items += "QoS 策略"
     } catch { Add-LogEntry "WARN" "快照 QoS 失败" }
-
-    # 4. Hosts 文件
     try {
         $hostsFile = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
         if (Test-Path $hostsFile) {
@@ -357,8 +303,6 @@ function Save-PreOptimizationSnapshot {
             $snap.Items += "Hosts 文件"
         }
     } catch { Add-LogEntry "WARN" "快照 Hosts 失败" }
-
-    # 5. TCP/IP 注册表参数 (IPv4 + IPv6)
     try {
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
         $regPathV6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
@@ -373,8 +317,6 @@ function Save-PreOptimizationSnapshot {
         [System.IO.File]::WriteAllLines((Join-Path $snapDir "tcpip_registry.txt"), $regSnap, [System.Text.Encoding]::UTF8)
         $snap.Items += "TCP/IP 注册表参数"
     } catch { Add-LogEntry "WARN" "快照注册表失败" }
-
-    # 6. 系统网络调度参数
     try {
         $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
         $nti = (Get-ItemProperty -Path $spPath -Name "NetworkThrottlingIndex" -ErrorAction SilentlyContinue).NetworkThrottlingIndex
@@ -383,12 +325,10 @@ function Save-PreOptimizationSnapshot {
         [System.IO.File]::WriteAllLines((Join-Path $snapDir "system_profile.txt"), $spSnap, [System.Text.Encoding]::UTF8)
         $snap.Items += "系统网络调度参数"
     } catch { Add-LogEntry "WARN" "快照系统调度参数失败" }
-
     $script:latestSnapshot = $snap
     Add-LogEntry "INFO" "优化前快照已保存：$($snap.Items -join ', ')"
     return $snap
 }
-
 function Find-LatestSnapshot {
     try {
         if (-not (Test-Path $script:snapshotDir)) { return $null }
@@ -396,14 +336,10 @@ function Find-LatestSnapshot {
         if ($dirs) { return $dirs.FullName } else { return $null }
     } catch { return $null }
 }
-
 function Restore-FromSnapshot {
     param([string]$SnapPath)
     $report = @{ Tcp = $false; Dns = $false; Qos = $false; Hosts = $false; Registry = $false; SystemProfile = $false; Errors = @() }
-
     if (-not $SnapPath -or -not (Test-Path $SnapPath)) { return $report }
-
-    # 1. 恢复 TCP/IP 注册表参数
     $regFile = Join-Path $SnapPath "tcpip_registry.txt"
     if (Test-Path $regFile) {
         try {
@@ -423,7 +359,6 @@ function Restore-FromSnapshot {
                     } catch { $failed++; $report.Errors += "注册表恢复失败：$name - $($_.Exception.Message)" }
                 }
             }
-            # 删除快照中不存在的优化参数
             $optParams = @("TcpNoDelay","EnableTCPNoDelay","TcpAckFrequency","TcpDelAckTicks","Tcp1323Opts","SackOpts","EnableTCPChimney","DefaultSendWindow","DefaultReceiveWindow","MaxUserPort","TcpTimedWaitDelay","KeepAliveTime","TcpHybridAck","TcpWindowSize","MaxConnections","EnableConnectionRateLimiting","EnableTcpFastOpen")
             $snapNames = $lines | ForEach-Object { if ($_ -match '^([^=]+)=') { $Matches[1] } }
             foreach ($pn in $optParams) {
@@ -436,8 +371,6 @@ function Restore-FromSnapshot {
             else { Add-LogEntry "INFO" "注册表恢复：$restored 项成功" }
         } catch { $report.Errors += "读取快照注册表文件失败：$($_.Exception.Message)" }
     }
-
-    # 2. 恢复 DNS（每网卡）
     $dnsFile = Join-Path $SnapPath "dns.txt"
     if (Test-Path $dnsFile) {
         try {
@@ -466,8 +399,6 @@ function Restore-FromSnapshot {
             Add-LogEntry $(if ($fail -eq 0) { "INFO" } else { "WARN" }) "DNS 从快照恢复：$ok 成功，$fail 失败"
         } catch { $report.Errors += "读取快照 DNS 文件失败：$($_.Exception.Message)" }
     }
-
-    # 3. 恢复 Hosts 文件
     $hostsSnap = Join-Path $SnapPath "hosts"
     if (Test-Path $hostsSnap) {
         try {
@@ -477,8 +408,6 @@ function Restore-FromSnapshot {
             Add-LogEntry "INFO" "Hosts 已从快照恢复"
         } catch { $report.Errors += "Hosts 恢复失败：$($_.Exception.Message)" }
     }
-
-    # 4. 恢复系统网络调度参数
     $spFile = Join-Path $SnapPath "system_profile.txt"
     if (Test-Path $spFile) {
         try {
@@ -496,13 +425,10 @@ function Restore-FromSnapshot {
             Add-LogEntry "INFO" "系统网络调度参数已从快照恢复"
         } catch { $report.Errors += "读取快照系统参数失败：$($_.Exception.Message)" }
     }
-
-    # 5. 恢复 TCP 全局设置（从快照文本解析并还原）
     $tcpFile = Join-Path $SnapPath "tcp_global.txt"
     if (Test-Path $tcpFile) {
         try {
             $tcpContent = [System.IO.File]::ReadAllText($tcpFile, [System.Text.Encoding]::UTF8)
-            # 解析快照中的 TCP 全局设置并还原
             $tcpRestoreCmds = @()
             if ($tcpContent -match 'Auto-Tuning Level\s*:\s*(\w+)') {
                 $tcpRestoreCmds += "netsh interface tcp set global autotuninglevel=$($Matches[1].ToLower())"
@@ -535,10 +461,8 @@ function Restore-FromSnapshot {
             Add-LogEntry $(if ($tcpFail -eq 0) { "INFO" } else { "WARN" }) "TCP 全局从快照恢复：$tcpOk 成功，$tcpFail 失败"
         } catch { $report.Errors += "读取快照 TCP 文件失败：$($_.Exception.Message)" }
     }
-
     return $report
 }
-
 function Add-LogEntry {
     param([string]$Level, [string]$Message)
     $timestamp = Get-Date -Format "HH:mm:ss"
@@ -551,17 +475,10 @@ function Add-LogEntry {
         })
     }
 }
-
-# ============================================================
-# Optimization Functions
-# ============================================================
-
 function Apply-TcpOptimization {
     $progress = $window.FindName("ProgressBar")
     $statusText = $window.FindName("StatusText")
     $results = @()
-
-    # TCP Global Settings
     $tcpCmds = @(
         @("netsh interface tcp set global autotuninglevel=normal", "TCP Auto-Tuning"),
         @("netsh interface tcp set global ecncapability=enabled", "ECN"),
@@ -571,7 +488,6 @@ function Apply-TcpOptimization {
         @("netsh interface tcp set global rsc=enabled", "RSC"),
         @("netsh interface tcp set supplemental Template=Internet CongestionProvider=ctcp", "CTCP")
     )
-
     $i = 0
     foreach ($cmd in $tcpCmds) {
         $i++
@@ -583,8 +499,6 @@ function Apply-TcpOptimization {
         $results += [PSCustomObject]@{ Name=$cmd[1]; Success=($r.ExitCode -eq 0); Detail=$cmd[0] }
         Start-Sleep -Milliseconds 100
     }
-
-    # Registry TCP Parameters (IPv4 + IPv6)
     $regSettings = @(
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpNoDelay", 1, "TcpNoDelay"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnableTCPNoDelay", 1, "EnableTCPNoDelay"),
@@ -597,10 +511,11 @@ function Apply-TcpOptimization {
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "DefaultReceiveWindow", 65535, "RecvWindow"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "MaxUserPort", 65534, "MaxUserPort"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpTimedWaitDelay", 30, "TimedWait"),
-        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "KeepAliveTime", 300000, "KeepAliveTime")
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "KeepAliveTime", 300000, "KeepAliveTime"),
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpMaxDataRetransmissions", 2, "TcpMaxDataRetransmissions"),
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "DefaultTTL", 64, "DefaultTTL"),
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnableTcpFastOpen", 1, "EnableTcpFastOpen")
     )
-
-    # 同时写入 IPv6 路径
     $regSettingsV6 = @(
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "EnableTCPNoDelay", 1, "EnableTCPNoDelay(V6)"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "TcpDelAckTicks", 0, "TcpDelAckTicks(V6)"),
@@ -609,9 +524,9 @@ function Apply-TcpOptimization {
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "EnableTCPChimney", 0, "EnableTCPChimney(V6)"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "MaxUserPort", 65534, "MaxUserPort(V6)"),
         @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "TcpTimedWaitDelay", 30, "TimedWait(V6)"),
-        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "KeepAliveTime", 300000, "KeepAliveTime(V6)")
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "KeepAliveTime", 300000, "KeepAliveTime(V6)"),
+        @("HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "TcpMaxDataRetransmissions", 2, "TcpMaxDataRetransmissions(V6)")
     )
-
     foreach ($reg in $regSettings) {
         $i++
         $window.Dispatcher.Invoke([Action]{
@@ -626,8 +541,6 @@ function Apply-TcpOptimization {
         }
         Start-Sleep -Milliseconds 50
     }
-
-    # IPv6 注册表优化
     foreach ($reg in $regSettingsV6) {
         $i++
         $window.Dispatcher.Invoke([Action]{
@@ -642,8 +555,6 @@ function Apply-TcpOptimization {
         }
         Start-Sleep -Milliseconds 50
     }
-
-    # Per-interface TcpNoDelay and TcpAckFrequency
     $adapters = Get-ActiveAdapters
     foreach ($adapter in $adapters) {
         try {
@@ -657,8 +568,6 @@ function Apply-TcpOptimization {
             Add-LogEntry "WARN" "网卡 $($adapter.Name) 无法获取 InterfaceGuid：$($_.Exception.Message)"
         }
     }
-
-    # System Profile
     $sysProfile = @(
         @("HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", 4294967295),
         @("HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 0)
@@ -676,8 +585,6 @@ function Apply-TcpOptimization {
             $results += [PSCustomObject]@{ Name=$sp[1]; Success=$false; Detail=$_.Exception.Message }
         }
     }
-
-    # Games Task
     $gamesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
     $gamesSettings = @(
         @("GPU Priority", 8, "DWord"),
@@ -702,21 +609,36 @@ function Apply-TcpOptimization {
             $results += [PSCustomObject]@{ Name="Games $($gs[0])"; Success=$false; Detail=$_.Exception.Message }
         }
     }
-
-    # QoS Policies
     $i++
     $window.Dispatcher.Invoke([Action]{
         $progress.Value = ($i / 20) * 100
         $statusText.Text = "QoS 策略..."
     })
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Java_Game`"" | Out-Null
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Bedrock_Game`"" | Out-Null
-    $qosResult = Invoke-Command "netsh qos add policy name=`"NetOpt_MC_Java_Game`" appPath=`"javaw.exe`" dscp=46 throttleRate=none"
-    $results += [PSCustomObject]@{ Name="QoS MC Java"; Success=$true; Detail="DSCP 46 for javaw.exe" }
-    $qosResult2 = Invoke-Command "netsh qos add policy name=`"NetOpt_MC_Bedrock_Game`" appPath=`"Minecraft.Windows.exe`" dscp=46 throttleRate=none"
-    $results += [PSCustomObject]@{ Name="QoS MC Bedrock"; Success=$true; Detail="DSCP 46 for Minecraft.Windows.exe" }
-
-    # DNS
+    $allQosPolicies = @(
+        @{ Name="NetOpt_MC_Java_Game"; App="javaw.exe" },
+        @{ Name="NetOpt_MC_Bedrock_Game"; App="Minecraft.Windows.exe" },
+        @{ Name="NetOpt_FPS_CS2_Proc"; App="cs2.exe" },
+        @{ Name="NetOpt_FPS_Val_Proc"; App="VALORANT-Win64-Shipping.exe" },
+        @{ Name="NetOpt_FPS_Apex_Proc"; App="r5apex.exe" },
+        @{ Name="NetOpt_FPS_CoD_Proc"; App="cod.exe" },
+        @{ Name="NetOpt_FPS_PUBG_Proc"; App="TslGame.exe" },
+        @{ Name="NetOpt_FPS_R6_Proc"; App="RainbowSix.exe" },
+        @{ Name="NetOpt_FPS_Roblox_Proc"; App="RobloxPlayerBeta.exe" },
+        @{ Name="NetOpt_OOPZ_Proc"; App="oopz.exe" }
+    )
+    $qosOk = 0; $qosTotal = $allQosPolicies.Count
+    foreach ($q in $allQosPolicies) {
+        try { Remove-NetQosPolicy -Name $q.Name -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+        try {
+            if ($q.App) {
+                New-NetQosPolicy -Name $q.Name -AppPathName $q.App -DSCPAction 46 -ErrorAction Stop | Out-Null
+            } elseif ($q.Port) {
+                New-NetQosPolicy -Name $q.Name -Protocol $q.Proto -LocalPort $q.Port -DSCPAction 46 -ErrorAction Stop | Out-Null
+            }
+            $qosOk++
+        } catch {}
+    }
+    $results += [PSCustomObject]@{ Name="QoS 策略"; Success=($qosOk -gt 0); Detail="DSCP 46 ($qosOk/$qosTotal)" }
     $i++
     $window.Dispatcher.Invoke([Action]{
         $progress.Value = ($i / 20) * 100
@@ -724,20 +646,16 @@ function Apply-TcpOptimization {
     })
     Invoke-Command "ipconfig /flushdns" | Out-Null
     $results += [PSCustomObject]@{ Name="DNS Flush"; Success=$true; Detail="ipconfig /flushdns" }
-
     $i++
     $window.Dispatcher.Invoke([Action]{
         $progress.Value = 100
         $statusText.Text = "完成！"
     })
-
     return $results
 }
-
 function Revert-TcpOptimization {
     $progress = $window.FindName("ProgressBar")
     $statusText = $window.FindName("StatusText")
-
     $window.Dispatcher.Invoke([Action]{
         $statusText.Text = "正在还原 TCP..."
         $progress.Value = 20
@@ -747,7 +665,6 @@ function Revert-TcpOptimization {
     Invoke-Command "netsh interface tcp set global timestamps=enabled" | Out-Null
     Invoke-Command "netsh interface tcp set global initialrto=1000" | Out-Null
     Invoke-Command "netsh interface tcp set supplemental Template=Internet CongestionProvider=cubic" | Out-Null
-
     $window.Dispatcher.Invoke([Action]{ $progress.Value = 40; $statusText.Text = "正在还原注册表..." })
     $tcpPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
     $tcpPathV6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
@@ -756,9 +673,7 @@ function Revert-TcpOptimization {
         Remove-ItemProperty -Path $tcpPath -Name $prop -Force -ErrorAction SilentlyContinue
         Remove-ItemProperty -Path $tcpPathV6 -Name $prop -Force -ErrorAction SilentlyContinue
     }
-    # 还原节能以太网
     Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "EnergyEfficientEthernet" -Force -ErrorAction SilentlyContinue
-    # 还原 WinHTTP/WinINet
     @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
       "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
       "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings",
@@ -766,12 +681,10 @@ function Revert-TcpOptimization {
         Remove-ItemProperty -Path $_ -Name "TcpAutotuning" -Force -ErrorAction SilentlyContinue
         Remove-ItemProperty -Path $_ -Name "DisableBranchCache" -Force -ErrorAction SilentlyContinue
     }
-    # 还原工作站参数
     $lanmanPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters"
     @("DisableBandwidthThrottling","DisableLargeMtu") | ForEach-Object {
         Remove-ItemProperty -Path $lanmanPath -Name $_ -Force -ErrorAction SilentlyContinue
     }
-    # 还原 QoS 策略注册表
     @("HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched",
       "HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS",
       "HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS") | ForEach-Object {
@@ -781,7 +694,6 @@ function Revert-TcpOptimization {
             Remove-ItemProperty -Path $_ -Name "DisableBranchCache" -Force -ErrorAction SilentlyContinue
         }
     }
-    # Per-interface
     $adapters = Get-ActiveAdapters
     foreach ($adapter in $adapters) {
         try {
@@ -793,24 +705,23 @@ function Revert-TcpOptimization {
             Add-LogEntry "WARN" "还原时无法获取网卡 $($adapter.Name) 的 InterfaceGuid"
         }
     }
-
     $window.Dispatcher.Invoke([Action]{ $progress.Value = 60; $statusText.Text = "正在还原系统参数..." })
     $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
     Set-ItemProperty -Path $spPath -Name "NetworkThrottlingIndex" -Value 10 -Type DWord -Force -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $spPath -Name "SystemResponsiveness" -Value 20 -Type DWord -Force -ErrorAction SilentlyContinue
-
     $window.Dispatcher.Invoke([Action]{ $progress.Value = 80; $statusText.Text = "正在移除 QoS..." })
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Java_Game`"" | Out-Null
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Bedrock_Game`"" | Out-Null
-
+    @("NetOpt_MC_Java_Game","NetOpt_MC_Bedrock_Game",
+      "NetOpt_FPS_CS2_Proc","NetOpt_FPS_CS2_Port","NetOpt_FPS_Val_Proc","NetOpt_FPS_Val_Port",
+      "NetOpt_FPS_Apex_Proc","NetOpt_FPS_Apex_Port","NetOpt_FPS_CoD_Proc","NetOpt_FPS_CoD_Port",
+      "NetOpt_FPS_PUBG_Proc","NetOpt_FPS_R6_Proc","NetOpt_FPS_R6_Port",
+      "NetOpt_FPS_Roblox_Proc","NetOpt_FPS_Roblox_Port","NetOpt_OOPZ_Proc") | ForEach-Object {
+        try { Remove-NetQosPolicy -Name $_ -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+    }
     $window.Dispatcher.Invoke([Action]{ $progress.Value = 100; $statusText.Text = "还原完成！" })
 }
-
 function Run-SpeedTest {
     $statusText = $window.FindName("StatusText")
     $progress = $window.FindName("ProgressBar")
-
-    # Ping test
     $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测量延迟..."; $progress.Value = 20 })
     $adapter = Get-ActiveAdapters | Select-Object -First 1
     $pingVal = -1
@@ -821,8 +732,6 @@ function Run-SpeedTest {
         }
     }
     if ($pingVal -lt 0) { $pingVal = Measure-PingLatency -TargetHost "1.1.1.1" -Count 3 }
-
-    # Download test
     $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测试下载..."; $progress.Value = 50 })
     $downloadMbps = 0
     try {
@@ -836,8 +745,6 @@ function Run-SpeedTest {
     } catch {
         $downloadMbps = -1
     }
-
-    # Upload test
     $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测试上传..."; $progress.Value = 80 })
     $uploadMbps = 0
     try {
@@ -852,81 +759,25 @@ function Run-SpeedTest {
     } catch {
         $uploadMbps = -1
     }
-
     $window.Dispatcher.Invoke([Action]{ $progress.Value = 100; $statusText.Text = "网速测试完成！" })
-
     return @{ Ping = $pingVal; Download = $downloadMbps; Upload = $uploadMbps }
 }
-
-# ============================================================
-# Bandwidth Monitor
-# ============================================================
-$monitorScript = $null
-$monitorRunning = $false
-
-function Start-BandwidthMonitor {
-    param([string]$InterfaceName)
-    if ($monitorRunning) { return }
-    $monitorRunning = $true
-
-    $prevStats = Get-InterfaceBytes -InterfaceName $InterfaceName
-    if (-not $prevStats) { return }
-    $prevTime = Get-Date
-
-    $monitorScript = New-Object System.Diagnostics.Stopwatch
-    $monitorScript.Start()
-
-    while ($monitorRunning) {
-        Start-Sleep -Milliseconds 1000
-        if (-not $monitorRunning) { break }
-
-        $currStats = Get-InterfaceBytes -InterfaceName $InterfaceName
-        $currTime = Get-Date
-        if (-not $currStats) { continue }
-
-        $timeDelta = ($currTime - $prevTime).TotalSeconds
-        if ($timeDelta -gt 0) {
-            $dlMbps = [math]::Round(($currStats.Received - $prevStats.Received) * 8 / 1000000 / $timeDelta, 2)
-            $ulMbps = [math]::Round(($currStats.Sent - $prevStats.Sent) * 8 / 1000000 / $timeDelta, 2)
-            if ($dlMbps -lt 0) { $dlMbps = 0 }
-            if ($ulMbps -lt 0) { $ulMbps = 0 }
-
-            $dlText = $window.FindName("RealtimeDownload")
-            $ulText = $window.FindName("RealtimeUpload")
-            $dlBar = $window.FindName("DownloadBar")
-            $ulBar = $window.FindName("UploadBar")
-
-            if ($dlText -and $ulText) {
-                $window.Dispatcher.Invoke([Action]{
-                    $dlText.Text = $dlMbps.ToString("F1")
-                    $ulText.Text = $ulMbps.ToString("F1")
-                    $dlBar.Value = [math]::Min($dlMbps, 1000)
-                    $ulBar.Value = [math]::Min($ulMbps, 1000)
-                })
-            }
-        }
-        $prevStats = $currStats
-        $prevTime = $currTime
-    }
-}
-
-function Stop-BandwidthMonitor {
-    $script:monitorRunning = $false
-}
-
-# ============================================================
-# XAML UI Definition
-# ============================================================
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="ALit-网络优化工具V3 - Minecraft PvP" 
         Width="1000" Height="680" 
-        Background="Transparent"
+        Background="#1E1E1E"
         WindowStyle="None"
-        AllowsTransparency="True"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResize" MinWidth="800" MinHeight="600">
+        ResizeMode="CanResize"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
+<WindowChrome.WindowChrome>
+    <shell:WindowChrome GlassFrameThickness="0" ResizeBorderThickness="0" CaptionHeight="0" CornerRadius="16"/>
+</WindowChrome.WindowChrome>
 
 <Window.Resources>
     <Style TargetType="TextBlock">
@@ -1014,10 +865,85 @@ function Stop-BandwidthMonitor {
             </Setter.Value>
         </Setter>
     </Style>
+    <Style TargetType="ScrollViewer">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style TargetType="CheckBox">
+        <Setter Property="FontFamily" Value="HarmonyOS Sans SC, Microsoft YaHei UI, Microsoft YaHei, Segoe UI"/>
+        <Setter Property="Foreground" Value="#E8E8E8"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="#666666"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="4,0,0,0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <BulletDecorator Background="Transparent">
+                        <BulletDecorator.Bullet>
+                            <Border Width="16" Height="16" CornerRadius="3" Background="#2A2A2A" BorderBrush="#666666" BorderThickness="1">
+                                <Path x:Name="checkMark" Data="M2,6 L6,10 L14,2" Stroke="#7CC7FF" StrokeThickness="2" Stretch="Uniform" Margin="2" Visibility="Collapsed"/>
+                            </Border>
+                        </BulletDecorator.Bullet>
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                    </BulletDecorator>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="checkMark" Property="Stroke" Value="#A0D8FF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="ToggleButton">
+        <Setter Property="FontFamily" Value="HarmonyOS Sans SC, Microsoft YaHei UI, Microsoft YaHei, Segoe UI"/>
+        <Setter Property="Foreground" Value="#E8E8E8"/>
+        <Setter Property="Background" Value="#3A3A3A"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="12,4"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="4" BorderThickness="0">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Opacity" Value="0.85"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Opacity" Value="0.7"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="ProgressBar">
+        <Setter Property="Background" Value="#3A3A3A"/>
+        <Setter Property="Foreground" Value="#7CC7FF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style TargetType="TextBox">
+        <Setter Property="FontFamily" Value="HarmonyOS Sans SC, Microsoft YaHei UI, Microsoft YaHei, Segoe UI"/>
+        <Setter Property="Background" Value="#333333"/>
+        <Setter Property="Foreground" Value="#E8E8E8"/>
+        <Setter Property="BorderBrush" Value="#555555"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="CaretBrush" Value="#E8E8E8"/>
+        <Setter Property="SelectionBrush" Value="#2D5A7C"/>
+    </Style>
 </Window.Resources>
 
-<Border x:Name="WindowChromeBorder" Background="#1E1E1E" CornerRadius="16" Margin="0" BorderBrush="#2A2A2A" BorderThickness="1" SnapsToDevicePixels="True">
-    <Grid ClipToBounds="True">
+<Border x:Name="WindowChromeBorder" Background="#1E1E1E" CornerRadius="16" Margin="0" BorderThickness="0" SnapsToDevicePixels="True">
+    <Grid x:Name="MainContentGrid" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="38"/>
             <RowDefinition Height="*"/>
@@ -1081,15 +1007,15 @@ function Stop-BandwidthMonitor {
                     Margin="12,3,12,3" Padding="14,10" Tag="Test">
                 <TextBlock Text="测试" Foreground="#E8E8E8" FontSize="14"/>
             </Border>
-            <Border x:Name="NavDiag" Background="#2A2A2A" CornerRadius="8" Cursor="Hand" 
-                    Margin="12,3,12,3" Padding="14,10" Tag="Diag">
-                <TextBlock Text="网络诊断" Foreground="#E8E8E8" FontSize="14"/>
-            </Border>
-            <Border x:Name="NavLog" Background="#2A2A2A" CornerRadius="8" Cursor="Hand" 
+            <Border x:Name="NavLog" Background="#2A2A2A" CornerRadius="8" Cursor="Hand"
                     Margin="12,3,12,3" Padding="14,10" Tag="Log">
                 <TextBlock Text="操作日志" Foreground="#E8E8E8" FontSize="14"/>
             </Border>
-            <Border x:Name="NavSettings" Background="#2A2A2A" CornerRadius="8" Cursor="Hand" 
+            <Border x:Name="NavHypoMux" Background="#2A2A2A" CornerRadius="8" Cursor="Hand"
+                    Margin="12,3,12,3" Padding="14,10" Tag="HypoMux">
+                <TextBlock Text="HypoMux" Foreground="#E8E8E8" FontSize="14"/>
+            </Border>
+            <Border x:Name="NavSettings" Background="#2A2A2A" CornerRadius="8" Cursor="Hand"
                     Margin="12,3,12,3" Padding="14,10" Tag="Settings">
                 <TextBlock Text="设置" Foreground="#E8E8E8" FontSize="14"/>
             </Border>
@@ -1178,7 +1104,7 @@ function Stop-BandwidthMonitor {
             <Border Background="#2B2B2B" CornerRadius="8" Padding="20" Margin="0,0,0,15">
                 <StackPanel>
                     <TextBlock Text="优化模式" Foreground="#F0F0F0" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                    <TextBlock Text="四个档位：均衡满足日常体验，普通优化一部分网络体验，完全应用全部网络优化，还原会撤销本工具修改。" 
+                    <TextBlock Text="四个档位：均衡满足日常体验，普通优化一部分网络体验，完全应用全部网络优化，还原会撤销本工具修改。"
                               Foreground="#E8E8E8" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                     <TextBlock Text="选择档位" Foreground="#FFFFFF" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
@@ -1216,8 +1142,8 @@ function Stop-BandwidthMonitor {
                     <TextBlock x:Name="SelectedModeName" Text="均衡（满足日常体验）" Foreground="#E8E8E8" FontSize="13" Margin="0,0,0,10"/>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <Button x:Name="BtnOptimize" Content="应用所选模式" Background="#7CC7FF" Foreground="#151515" 
-                               FontWeight="SemiBold" Padding="24,10" Margin="0,0,10,0" 
+                        <Button x:Name="BtnOptimize" Content="应用所选模式" Background="#7CC7FF" Foreground="#151515"
+                               FontWeight="SemiBold" Padding="24,10" Margin="0,0,10,0"
                                FontSize="14" BorderThickness="0" Cursor="Hand"/>
                         <Button x:Name="BtnRevert" Content="立即还原" Background="#EF5350" Foreground="White"
                                FontWeight="SemiBold" Padding="24,10" Margin="0,0,10,0"
@@ -1230,7 +1156,7 @@ function Stop-BandwidthMonitor {
                     <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
                         <TextBlock x:Name="StatusText" Text="就绪" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <ProgressBar x:Name="ProgressBar" Height="6" Margin="0,5,0,0" Foreground="#7CC7FF" Background="#3A3A3A" 
+                    <ProgressBar x:Name="ProgressBar" Height="6" Margin="0,5,0,0" Foreground="#7CC7FF" Background="#3A3A3A"
                                 BorderThickness="0" Value="0"/>
                 </StackPanel>
             </Border>
@@ -1265,7 +1191,7 @@ function Stop-BandwidthMonitor {
                 <StackPanel>
                     <TextBlock Text="关键优化说明：" Foreground="#F2F2F2" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <TextBlock Foreground="#F2F2F2" FontSize="13" TextWrapping="Wrap" LineHeight="22"
-                              Text="1. TcpNoDelay=1 - 禁用 Nagle 算法，降低交互延迟&#x0a;2. TcpAckFrequency=1 - 提高 ACK 响应频率&#x0a;3. NetworkThrottlingIndex=0xFFFFFFFF - 关闭系统网络节流&#x0a;4. SystemResponsiveness=0 - 降低后台任务保留比例&#x0a;5. CTCP 拥塞控制 - 改善吞吐表现&#x0a;6. ECN 启用 - 降低拥塞重传概率&#x0a;7. RSS 启用 - 多核并行处理网络流量&#x0a;8. 游戏任务 GPU/IO 优先级提高&#x0a;9. 发送/接收窗口参数优化&#x0a;10. MaxUserPort 与 TIME_WAIT 参数优化"/>
+                              Text="1. TcpNoDelay=1 - 禁用 Nagle 算法，降低交互延迟&#x0a;2. TcpAckFrequency=1 - 提高 ACK 响应频率&#x0a;3. NetworkThrottlingIndex=0xFFFFFFFF - 关闭系统网络节流&#x0a;4. SystemResponsiveness=0 - 降低后台任务保留比例&#x0a;5. CTCP 拥塞控制 - 改善吞吐表现&#x0a;6. ECN 启用 - 降低拥塞重传概率&#x0a;7. RSS 启用 - 多核并行处理网络流量&#x0a;8. 游戏任务 GPU/IO 优先级提高&#x0a;9. 发送/接收窗口参数优化&#x0a;10. MaxUserPort 与 TIME_WAIT 参数优化&#x0a;11. FPS游戏优化 - DSCP 46 优先级 + UDP FEC + 小包优先标记"/>
                 </StackPanel>
             </Border>
         </StackPanel>
@@ -1375,6 +1301,7 @@ function Stop-BandwidthMonitor {
                             <CheckBox x:Name="OptEnableWsdOff" Content="EnableWsd=0：关闭 TCP/IP WSD 相关开关" Foreground="#E8E8E8" FontSize="13" Margin="0,4"/>
                             <CheckBox x:Name="OptConnRateLimit" Content="EnableConnectionRateLimiting=0：禁用连接速率限制" Foreground="#E8E8E8" FontSize="13" Margin="0,4"/>
                             <CheckBox x:Name="OptAppDscp" Content="Application DSCP Marking Request=Allowed：允许应用请求 DSCP 标记" Foreground="#E8E8E8" FontSize="13" Margin="0,4"/>
+                            <CheckBox x:Name="OptFpsQoS" Content="FPS游戏 QoS：CS2/Valorant/Apex/CoD/PUBG/R6/Roblox/OOPZ 进程+端口 DSCP 46 优先级" Foreground="#E8E8E8" FontSize="13" Margin="0,4"/>
 
                             <TextBlock Text="延迟与连接优化" Foreground="#7CC7FF" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,8"/>
                             <CheckBox x:Name="OptTcpHybridAck" Content="TcpHybridAck=0：关闭混合 ACK 延迟（降低小包延迟）" Foreground="#E8E8E8" FontSize="13" Margin="0,4"/>
@@ -1449,13 +1376,24 @@ function Stop-BandwidthMonitor {
                     <TextBlock Text="WinDivert 是开源内核级数据包拦截驱动，在 NDIS 层逐包捕获并修改 TCP/IP 头部 DSCP 字段。与上面的 QoS 模拟不同，这是真正的逐包修改，效果等同于 v7 Turbo。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
                     <TextBlock Text="[!] 警告：此功能需要安装内核驱动（WinDivert64.sys），可能被杀毒软件标记。驱动安装后所有流量经过内核拦截层，如遇蓝屏或不稳定请立即停止并卸载驱动。" Foreground="#FFB74D" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,0"/>
                     <WrapPanel Margin="0,12,0,0">
-                        <TextBlock Text="TCP 端口:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBox x:Name="WdTcpPort" Text="25565" FontSize="13" Width="60" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="4,2"/>
-                        <TextBlock Text="UDP 端口:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="12,0,6,0"/>
-                        <TextBox x:Name="WdUdpPort" Text="19132" FontSize="13" Width="60" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="4,2"/>
-                        <TextBlock Text="DSCP:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="12,0,6,0"/>
-                        <TextBox x:Name="WdDscp" Text="46" FontSize="13" Width="40" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="4,2"/>
+                        <TextBlock Text="优化模式:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <UniformGrid Columns="6" Margin="0,0,12,4">
+                            <Button x:Name="WdModeBtn0" Tag="0" Content="普通" Background="#3A3A3A" Foreground="#E8E8E8" FontSize="12" Padding="6,6" Margin="0,0,3,0" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="WdModeBtn1" Tag="1" Content="最佳" Background="#7CC7FF" Foreground="#111111" FontSize="12" Padding="6,6" Margin="0,0,3,0" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="WdModeBtn2" Tag="2" Content="急速" Background="#3A3A3A" Foreground="#E8E8E8" FontSize="12" Padding="6,6" Margin="0,0,3,0" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="WdModeBtn3" Tag="3" Content="狂暴" Background="#3A3A3A" Foreground="#E8E8E8" FontSize="12" Padding="6,6" Margin="0,0,3,0" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="WdModeBtn4" Tag="4" Content="BT" Background="#3A3A3A" Foreground="#E8E8E8" FontSize="12" Padding="6,6" Margin="0,0,3,0" BorderThickness="0" Cursor="Hand"/>
+                            <Button x:Name="WdModeBtn5" Tag="5" Content="FPS" Background="#3A3A3A" Foreground="#E8E8E8" FontSize="12" Padding="6,6" BorderThickness="0" Cursor="Hand"/>
+                        </UniformGrid>
+                        <TextBlock x:Name="WdModeLabel" Text="1" Visibility="Collapsed"/>
+                        <TextBlock Text="TCP 端口:" Foreground="#E8E8E8" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox x:Name="WdTcpPort" Text="25565" FontSize="12" Width="70" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="3,2"/>
+                        <TextBlock Text="UDP 端口:" Foreground="#E8E8E8" FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="WdUdpPort" Text="19132" FontSize="12" Width="70" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="3,2"/>
+                        <TextBlock Text="DSCP:" Foreground="#E8E8E8" FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                        <TextBox x:Name="WdDscp" Text="46" FontSize="12" Width="40" Background="#0F3460" Foreground="#E0E0E0" BorderBrush="#2A2A4A" Padding="3,2"/>
                     </WrapPanel>
+                    <TextBlock Text="提示: 急速+=UDP FEC | 狂暴=强FEC+路径切换 | BT=TCP冗余+延后恢复 | FPS=三倍FEC+UDP回溯+1ms超低延迟+抖动自适应 | 小UDP包(&lt;512B)自动优先" Foreground="#7CC7FF" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <Button x:Name="BtnWdStart" Content="启动逐包优化" Background="#00E676" Foreground="#1A1A2E"
                                FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,0,10,0"/>
@@ -1472,9 +1410,55 @@ function Stop-BandwidthMonitor {
                 </StackPanel>
             </Border>
 
+            <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="3. 加速器兼容支持" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock Text="自动检测常见游戏加速器（UU/迅游/雷神/3733等），显示加速器状态。启用兼容模式后 WinDivert 过滤器将匹配加速器虚拟网卡流量，确保逐包优化覆盖加速器链路。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
+                    <WrapPanel Margin="0,12,0,0">
+                        <TextBlock Text="检测状态:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="AccelStatus" Text="未检测到加速器" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                    </WrapPanel>
+                    <WrapPanel Margin="0,8,0,0">
+                        <TextBlock Text="加速器类型:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox x:Name="AccelSelector" SelectedIndex="0" FontSize="13" MinWidth="120" Background="#0F3460" Foreground="#E0E0E0" Margin="0,0,12,4">
+                            <ComboBoxItem Content="自动检测" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="UU加速器" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="迅游加速器" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="雷神加速器" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="3733加速器" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="奇游加速器" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="手动指定" Foreground="#E0E0E0"/>
+                        </ComboBox>
+                        <TextBlock Text="游戏类型:" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="12,0,6,0"/>
+                        <ComboBox x:Name="GameSelector" SelectedIndex="0" FontSize="13" MinWidth="120" Background="#0F3460" Foreground="#E0E0E0" Margin="0,0,12,4">
+                            <ComboBoxItem Content="Minecraft Java (25565)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Minecraft 基岩版 (19132)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="CS2 (27015)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Valorant (7448)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Apex Legends (37015)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Call of Duty (3074)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="PUBG (27015)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Rainbow Six (3074)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="Roblox (53640)" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="OOPZ 语音" Foreground="#E0E0E0"/>
+                            <ComboBoxItem Content="自定义端口" Foreground="#E0E0E0"/>
+                        </ComboBox>
+                    </WrapPanel>
+                    <WrapPanel Margin="0,8,0,0">
+                        <CheckBox x:Name="ChkAccelCompat" Content="启用加速器兼容模式（WinDivert 过滤器匹配全部网卡）" IsChecked="False" Foreground="#E8E8E8" FontSize="13" Margin="0,0,0,4"/>
+                    </WrapPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button x:Name="BtnAccelDetect" Content="检测加速器" Background="#00E676" Foreground="#1A1A2E"
+                               FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,0,10,0"/>
+                        <Button x:Name="BtnAccelApply" Content="应用端口预设" Background="#7CC7FF" Foreground="#151515"
+                               FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <Border Background="#16213E" CornerRadius="8" Padding="16">
                 <StackPanel>
-                    <TextBlock Text="3. 网卡驱动参数优化" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock Text="4. 网卡驱动参数优化" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6"/>
                     <TextBlock Text="优化活动网卡驱动层高级属性：关闭节能以太网/绿色以太网/省电模式，启用 RSS，并尝试低延迟驱动参数。不自动安装驱动。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
                     <WrapPanel Margin="0,12,0,0">
                         <CheckBox x:Name="ChkDriverRss" Content="启用 RSS / TaskOffload" IsChecked="True" Foreground="#E8E8E8" FontSize="13" Margin="0,0,18,8"/>
@@ -1498,7 +1482,7 @@ function Stop-BandwidthMonitor {
 
             <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,10,0,0">
                 <StackPanel>
-                    <TextBlock Text="4. MTU 最佳值智能优化" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock Text="5. MTU 最佳值智能优化" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6"/>
                     <TextBlock Text="自动探测网络链路支持的最大不分片包大小，计算最佳 MTU 值并应用到所选网卡。探测使用 223.5.5.5 / 223.6.6.6 作为目标，二分法精确搜索。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
                     <WrapPanel Margin="0,12,0,0">
                         <TextBlock Text="选择网卡：" Foreground="#E8E8E8" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -1518,13 +1502,13 @@ function Stop-BandwidthMonitor {
         </StackPanel>
         <StackPanel x:Name="QosPanel" Visibility="Collapsed">
             <TextBlock Text="QoS - 流量优先级" Foreground="#F2F2F2" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,5"/>
-            <TextBlock Text="使用 DSCP 46 为 Minecraft 流量设置更高优先级" Foreground="#E0E0E0" FontSize="13" Margin="0,0,0,15"/>
+            <TextBlock Text="使用 DSCP 46 为 Minecraft 及 FPS 游戏流量设置最高优先级" Foreground="#E0E0E0" FontSize="13" Margin="0,0,0,15"/>
 
             <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
                 <StackPanel>
-                    <TextBlock Text="Minecraft QoS 策略：" Foreground="#F2F2F2" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="游戏 QoS 策略：" Foreground="#F2F2F2" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <TextBlock Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"
-                              Text="- javaw.exe（Minecraft Java）：DSCP 46，不限速&#x0a;- Minecraft.Windows.exe（基岩版）：DSCP 46&#x0a;- 端口 25565（Java 默认）：DSCP 46&#x0a;- 端口 19132（基岩版 UDP）：DSCP 46"/>
+                              Text="- javaw.exe（Minecraft Java）：DSCP 46，不限速&#x0a;- Minecraft.Windows.exe（基岩版）：DSCP 46&#x0a;- 端口 25565（Java 默认）：DSCP 46&#x0a;- 端口 19132（基岩版 UDP）：DSCP 46&#x0a;- CS2/Valorant/Apex/CoD/PUBG/R6/Roblox 进程：DSCP 46&#x0a;- 端口 27015/7448/37015/3074/6015/53640 UDP：DSCP 46&#x0a;- oopz.exe（OOPZ 语音）：DSCP 46"/>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <Button x:Name="BtnApplyQoS" Content="应用 QoS" Background="#00E676" Foreground="#1A1A2E" 
                                FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,0,10,0"/>
@@ -1541,61 +1525,6 @@ function Stop-BandwidthMonitor {
                     <TextBox x:Name="QoSPolicyText" Text="--" FontFamily="HarmonyOS Sans SC, Microsoft YaHei UI, Consolas" FontSize="13" 
                             Foreground="#E0E0E0" Background="#0F3460" BorderThickness="0" IsReadOnly="True" 
                             TextWrapping="Wrap" Height="150" VerticalScrollBarVisibility="Auto" Padding="8"/>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-
-        <!-- Diagnostics Panel -->
-        <StackPanel x:Name="DiagPanel" Visibility="Collapsed">
-            <TextBlock Text="网络诊断" Foreground="#F2F2F2" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,5"/>
-            <TextBlock Text="实时带宽监控与网络分析" Foreground="#E0E0E0" FontSize="13" Margin="0,0,0,15"/>
-
-            <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="实时带宽" Foreground="#F2F2F2" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <ToggleButton x:Name="MonitorToggle" Grid.Column="1" Content="开始监控" Background="#0F3460" Foreground="#F2F2F2" 
-                                     Padding="12,4" FontSize="13" BorderThickness="0"/>
-                    </Grid>
-                    <UniformGrid Columns="2">
-                        <Border Background="#0F3460" CornerRadius="6" Padding="12" Margin="0,0,6,0">
-                            <StackPanel>
-                                <TextBlock Text="下载" Foreground="#E0E0E0" FontSize="13"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="RealtimeDownload" Text="0.0" Foreground="#00E676" FontSize="24" FontWeight="Bold"/>
-                                    <TextBlock Text=" Mbps" Foreground="#E0E0E0" FontSize="13" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
-                                </StackPanel>
-                                <ProgressBar x:Name="DownloadBar" Height="4" Margin="0,4,0,0" Foreground="#00E676" Background="#1A1A2E" BorderThickness="0" Maximum="100" Value="0"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="#0F3460" CornerRadius="6" Padding="12" Margin="6,0,0,0">
-                            <StackPanel>
-                                <TextBlock Text="上传" Foreground="#E0E0E0" FontSize="13"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="RealtimeUpload" Text="0.0" Foreground="#FFB74D" FontSize="24" FontWeight="Bold"/>
-                                    <TextBlock Text=" Mbps" Foreground="#E0E0E0" FontSize="13" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
-                                </StackPanel>
-                                <ProgressBar x:Name="UploadBar" Height="4" Margin="0,4,0,0" Foreground="#FFB74D" Background="#1A1A2E" BorderThickness="0" Maximum="100" Value="0"/>
-                            </StackPanel>
-                        </Border>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
-
-            <Border Background="#16213E" CornerRadius="8" Padding="16">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="完整诊断" Foreground="#F2F2F2" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <Button x:Name="BtnRunDiag" Content="运行诊断" Background="#00E676" Foreground="#1A1A2E" 
-                               Padding="12,4" FontSize="13" BorderThickness="0"/>
-                    </StackPanel>
-                    <TextBox x:Name="DiagResults" Text="点击运行诊断开始..." FontFamily="HarmonyOS Sans SC, Microsoft YaHei UI, Consolas" FontSize="13" 
-                            Foreground="#E0E0E0" Background="#0F3460" BorderThickness="0" IsReadOnly="True" 
-                            TextWrapping="Wrap" Height="200" VerticalScrollBarVisibility="Auto" Padding="8"/>
                 </StackPanel>
             </Border>
         </StackPanel>
@@ -1667,6 +1596,49 @@ function Stop-BandwidthMonitor {
             </Border>
         </StackPanel>
 
+        <!-- HypoMux Panel -->
+        <StackPanel x:Name="HypoMuxPanel" Visibility="Collapsed">
+            <TextBlock Text="HypoMux 多网卡带宽聚合" Foreground="#F0F0F0" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,10"/>
+            <Border Background="#1B2A4A" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="声明：HypoMux 是第三方开源项目，版权归 Hypostasis-Cat 所有。本面板集成了基于 HypoMux 核心算法的简化实现（HypoMuxLite），不包含 HypoMux 原始代码。完整版请从 GitHub 下载。" Foreground="#FFB74D" FontSize="13" TextWrapping="Wrap" LineHeight="20" FontWeight="SemiBold"/>
+                    <TextBlock Text="GitHub: https://github.com/Hypostasis-Cat/HypoMux" Foreground="#7CC7FF" FontSize="13" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="工作原理" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="启动后会在本地 127.0.0.1:10801 开启 HTTP 代理，并设置 Windows 系统代理。每个新连接通过 round-robin 轮询分配到不同网卡，使用 IP_UNICAST_IF 绑定出站接口，实现多网卡带宽叠加。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="22"/>
+                    <TextBlock Text="适用场景：Steam 更新、IDM 下载、浏览器多线程下载。需要至少 2 个活动网络连接（如网线+WiFi）。" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="22" Margin="0,8,0,0"/>
+                    <TextBlock Text="注意：本功能面向下载吞吐量优化，不适用于竞技游戏延迟优化。停止后自动恢复系统代理。" Foreground="#FFB74D" FontSize="13" TextWrapping="Wrap" LineHeight="22" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="网卡状态" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="HypoMuxNicStatus" Text="点击下方按钮检测当前活动网卡..." Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
+                    <Button x:Name="BtnHypoMuxDetectNic" Content="检测活动网卡" Background="#7CC7FF" Foreground="#151515" FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,12,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Background="#16213E" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="代理控制" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="HypoMuxProxyStatus" Text="代理未运行" Foreground="#E0E0E0" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button x:Name="BtnHypoMuxStart" Content="启动聚合代理" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,0,10,0"/>
+                        <Button x:Name="BtnHypoMuxStop" Content="停止代理" Background="#FF5252" Foreground="White" FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0" Margin="0,0,10,0" IsEnabled="False"/>
+                        <Button x:Name="BtnHypoMuxDownload" Content="下载完整版" Background="#3A3A3A" Foreground="#E8E8E8" FontWeight="SemiBold" Padding="16,8" FontSize="13" BorderThickness="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Background="#0D1117" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="运行日志" Foreground="#7CC7FF" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox x:Name="HypoMuxLogBox" Text="" Foreground="#00E676" FontSize="12" FontFamily="Consolas" Background="#0D1117" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Height="200" VerticalScrollBarVisibility="Auto"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
     </Grid>
     </ScrollViewer>
 </Grid>
@@ -1674,18 +1646,18 @@ function Stop-BandwidthMonitor {
 </Border>
 </Window>
 "@
-
-# ============================================================
-# Parse XAML and Create Window
-# ============================================================
 $window = [Windows.Markup.XamlReader]::Parse($xaml.OuterXml)
 Update-SplashText "正在初始化界面..."
-
-# ============================================================
-# Event Handlers
-# ============================================================
-
-# Windows 10 圆角窗口：自绘标题栏行为
+$script:UpdateRoundedClip = {
+    $grid = $window.FindName("MainContentGrid")
+    if (-not $grid) { return }
+    $w = $grid.ActualWidth
+    $h = $grid.ActualHeight
+    if ($w -le 0 -or $h -le 0) { return }
+    $rect = New-Object System.Windows.Rect(0, 0, $w, $h)
+    $clip = New-Object System.Windows.Media.RectangleGeometry($rect, 15.0, 15.0)
+    $grid.Clip = $clip
+}
 $titleBar = $window.FindName("CustomTitleBar")
 if ($titleBar) {
     $titleBar.Add_MouseLeftButtonDown([System.Windows.Input.MouseButtonEventHandler]{
@@ -1705,14 +1677,12 @@ if ($titleBar) {
         }
     })
 }
-
 $btnMinimize = $window.FindName("BtnWindowMinimize")
 if ($btnMinimize) {
     $btnMinimize.Add_Click({
         $window.WindowState = "Minimized"
     })
 }
-
 $btnMaxRestore = $window.FindName("BtnWindowMaxRestore")
 if ($btnMaxRestore) {
     $btnMaxRestore.Add_Click({
@@ -1725,38 +1695,38 @@ if ($btnMaxRestore) {
         }
     })
 }
-
 $window.Add_StateChanged({
     $btn = $window.FindName("BtnWindowMaxRestore")
     if ($btn) {
         if ($window.WindowState -eq "Maximized") { $btn.Content = "❐" } else { $btn.Content = "□" }
     }
+    $window.Dispatcher.BeginInvoke([System.Windows.Threading.DispatcherPriority]::Background, [Action]{
+        & $script:UpdateRoundedClip
+    }) | Out-Null
 })
-
 $btnClose = $window.FindName("BtnWindowClose")
 if ($btnClose) {
     $btnClose.Add_Click({
         $window.Close()
     })
 }
-
 $window.Add_Loaded({
     Add-LogEntry "INFO" "ALit-网络优化工具V3 已启动"
     Add-LogEntry "INFO" "管理员权限: $isAdmin"
     Refresh-OptimizationStatus
-
-    # 启动速度优化：不在窗口加载时同步扫描网卡/TCP，避免首屏被系统命令阻塞。
     $tcpText = $window.FindName("TcpSettingsText")
     if ($tcpText) {
         $tcpText.Text = "已跳过启动时自动扫描，以提升启动速度。`r`n点击刷新按钮可查看当前 TCP 全局设置。"
     }
     Add-LogEntry "INFO" "启动时已跳过自动网卡/TCP 扫描"
+    & $script:UpdateRoundedClip
 })
-
-# Navigation
+$window.Add_SizeChanged({
+    & $script:UpdateRoundedClip
+})
 function Update-NavButtons {
     param([string]$selectedTag)
-    $navItems = @("NavDashboard", "NavTcp", "NavDns", "NavQos", "NavHosts", "NavCustom", "NavTest", "NavDiag", "NavLog", "NavSettings")
+    $navItems = @("NavDashboard", "NavTcp", "NavDns", "NavQos", "NavHosts", "NavCustom", "NavTest", "NavLog", "NavHypoMux", "NavSettings")
     $selBg = if ($script:currentTheme -eq "Light") { "#90CAF9" } else { "#2D5A7C" }
     $selFg = if ($script:currentTheme -eq "Light") { "#1A1A1A" } else { "#FFFFFF" }
     $unselBg = if ($script:currentTheme -eq "Light") { "#F0F0F0" } else { "#2A2A2A" }
@@ -1775,7 +1745,6 @@ function Update-NavButtons {
         }
     }
 }
-
 $script:SwitchNavPanel = {
     param([string]$tag)
     $window.FindName("DashboardPanel").Visibility = "Collapsed"
@@ -1785,9 +1754,9 @@ $script:SwitchNavPanel = {
     $window.FindName("HostsPanel").Visibility = "Collapsed"
     $window.FindName("CustomPanel").Visibility = "Collapsed"
     $window.FindName("TestPanel").Visibility = "Collapsed"
-    $window.FindName("DiagPanel").Visibility = "Collapsed"
     $window.FindName("LogPanel").Visibility = "Collapsed"
     $window.FindName("SettingsPanel").Visibility = "Collapsed"
+    $window.FindName("HypoMuxPanel").Visibility = "Collapsed"
     switch ($tag) {
         "Dashboard" {
             $window.FindName("DashboardPanel").Visibility = "Visible"
@@ -1821,21 +1790,19 @@ $script:SwitchNavPanel = {
                 } catch { Add-LogEntry "WARN" "填充 MTU 网卡列表失败" }
             }
         }
-        "Diag" { $window.FindName("DiagPanel").Visibility = "Visible" }
         "Log" { $window.FindName("LogPanel").Visibility = "Visible" }
+        "HypoMux" { $window.FindName("HypoMuxPanel").Visibility = "Visible" }
         "Settings" {
             $window.FindName("SettingsPanel").Visibility = "Visible"
         }
     }
     Update-NavButtons $tag
 }
-
 function Refresh-CurrentDnsAsync {
     $runspace = [RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.Open()
     $runspace.SessionStateProxy.SetVariable("window", $window)
-
     $ps = [PowerShell]::Create()
     $ps.Runspace = $runspace
     $ps.AddScript({
@@ -1853,7 +1820,6 @@ function Refresh-CurrentDnsAsync {
             $window.FindName("CurrentDnsText").Text = $dnsText
         })
     }) | Out-Null
-
     $handle = $ps.BeginInvoke()
     Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
         if ($ps.InvocationStateInfo.State -eq "Completed") {
@@ -1863,13 +1829,8 @@ function Refresh-CurrentDnsAsync {
         }
     } | Out-Null
 }
-
-# ============================================================
-# Settings: Load / Save / Apply
-# ============================================================
 $script:settingsFile = Join-Path $script:stateDir "settings.json"
 $script:currentTheme = "Dark"
-
 function Load-Settings {
     try {
         if (Test-Path $script:settingsFile) {
@@ -1886,7 +1847,6 @@ function Load-Settings {
         }
     } catch { Add-LogEntry "WARN" "加载设置失败：$($_.Exception.Message)" }
 }
-
 function Save-Settings {
     try {
         if (-not (Test-Path $script:stateDir)) { New-Item -Path $script:stateDir -ItemType Directory -Force | Out-Null }
@@ -1902,30 +1862,24 @@ function Save-Settings {
         [System.IO.File]::WriteAllText($script:settingsFile, $json, [System.Text.Encoding]::UTF8)
     } catch { Add-LogEntry "WARN" "保存设置失败：$($_.Exception.Message)" }
 }
-
 function Apply-Theme {
     param([string]$theme)
     $script:currentTheme = $theme
-
-    # 暗色 → 明亮 背景映射（6位hex无alpha）
     $darkBgMap = @{
         "1E1E1E" = "E8E8E8"; "171717" = "DDDDDD"; "1B1B1B" = "E0E0E0"
         "2A2A2A" = "F0F0F0"; "2B2B2B" = "F5F5F5"; "16213E" = "E3F2FD"
         "252525" = "E0E0E0"; "0F3460" = "BBDEFB"; "333333" = "FFFFFF"
         "3A3A3A" = "F0F0F0"; "2D5A7C" = "90CAF9"
     }
-    # 暗色 → 明亮 前景映射
     $darkFgMap = @{
         "E8E8E8" = "1A1A1A"; "F2F2F2" = "1A1A1A"; "F0F0F0" = "212121"
         "FFFFFF" = "1A1A1A"; "E0E0E0" = "333333"; "D8D8D8" = "333333"
         "7CC7FF" = "1565C0"; "00E676" = "2E7D32"
     }
-    # 反向映射（明亮 → 暗色）
     $lightBgMap = @{}
     $lightFgMap = @{}
     foreach ($k in $darkBgMap.Keys) { $lightBgMap[$darkBgMap[$k]] = $k }
     foreach ($k in $darkFgMap.Keys) { $lightFgMap[$darkFgMap[$k]] = $k }
-
     if ($theme -eq "Light") {
         $bgMap = $darkBgMap; $fgMap = $darkFgMap
         $window.Background = Create-Brush "#E8E8E8"
@@ -1933,16 +1887,11 @@ function Apply-Theme {
         $bgMap = $lightBgMap; $fgMap = $lightFgMap
         $window.Background = Create-Brush "#1E1E1E"
     }
-
     Apply-ThemeRecursive $window $bgMap $fgMap
 }
-
 function Apply-ThemeRecursive {
     param($element, $bgMap, $fgMap)
-
     if ($null -eq $element) { return }
-
-    # Border 背景
     if ($element -is [System.Windows.Controls.Border]) {
         $bg = $element.Background
         if ($bg -and $bg -is [System.Windows.Media.SolidColorBrush]) {
@@ -1952,7 +1901,6 @@ function Apply-ThemeRecursive {
                 $element.Background = Create-Brush ("#" + $bgMap[$hex])
             }
         }
-        # Border 前景（Border 内若直接含 TextBlock）
         $fg = $element.Foreground
         if ($fg -and $fg -is [System.Windows.Media.SolidColorBrush]) {
             $c = $fg.Color
@@ -1964,8 +1912,6 @@ function Apply-ThemeRecursive {
         if ($element.Child) { Apply-ThemeRecursive $element.Child $bgMap $fgMap }
         return
     }
-
-    # TextBlock 前景
     if ($element -is [System.Windows.Controls.TextBlock]) {
         $fg = $element.Foreground
         if ($fg -and $fg -is [System.Windows.Media.SolidColorBrush]) {
@@ -1977,8 +1923,6 @@ function Apply-ThemeRecursive {
         }
         return
     }
-
-    # CheckBox / RadioButton 前景
     if ($element -is [System.Windows.Controls.CheckBox] -or $element -is [System.Windows.Controls.RadioButton]) {
         $fg = $element.Foreground
         if ($fg -and $fg -is [System.Windows.Media.SolidColorBrush]) {
@@ -1990,16 +1934,12 @@ function Apply-ThemeRecursive {
         }
         return
     }
-
-    # Panel（StackPanel / Grid / UniformGrid 等）
     if ($element -is [System.Windows.Controls.Panel]) {
         foreach ($child in $element.Children) {
             Apply-ThemeRecursive $child $bgMap $fgMap
         }
         return
     }
-
-    # ContentControl（ScrollViewer / Button 等）
     if ($element -is [System.Windows.Controls.ContentControl]) {
         $content = $element.Content
         if ($content -is [System.Windows.DependencyObject]) {
@@ -2007,8 +1947,6 @@ function Apply-ThemeRecursive {
         }
         return
     }
-
-    # ItemsControl
     if ($element -is [System.Windows.Controls.ItemsControl]) {
         foreach ($item in $element.Items) {
             if ($item -is [System.Windows.DependencyObject]) {
@@ -2018,7 +1956,6 @@ function Apply-ThemeRecursive {
         return
     }
 }
-
 function Create-Brush {
     param([string]$hex)
     try {
@@ -2026,7 +1963,6 @@ function Create-Brush {
         return New-Object System.Windows.Media.SolidColorBrush($c)
     } catch { return $null }
 }
-
 function Update-SysInfoVisibility {
     $chkSys = $window.FindName("ChkShowSysInfo")
     $sysInfoCards = $window.FindName("SysInfoCards")
@@ -2035,21 +1971,15 @@ function Update-SysInfoVisibility {
         else { $sysInfoCards.Visibility = "Collapsed" }
     }
 }
-
 function Refresh-SysInfo {
     $chkSys = $window.FindName("ChkShowSysInfo")
     $showSys = if ($chkSys) { [bool]$chkSys.IsChecked } else { $true }
-
     if (-not $showSys) {
         $sysInfoCards = $window.FindName("SysInfoCards")
         if ($sysInfoCards) { $sysInfoCards.Visibility = "Collapsed" }
         return
     }
-
-    # 若已有查询在运行，跳过本次（由全局定时器下次再触发）
     if ($script:sysHandle -and -not $script:sysHandle.IsCompleted) { return }
-
-    # 清理上一次的 PS 对象、Runspace 和轮询 timer
     if ($script:sysTimer) { try { $script:sysTimer.Stop() } catch {} }
     if ($script:sysPS) { try { $script:sysPS.Dispose() } catch {} }
     if ($script:sysRunspace) { try { $script:sysRunspace.Close(); $script:sysRunspace.Dispose() } catch {} }
@@ -2057,8 +1987,6 @@ function Refresh-SysInfo {
     $script:sysPS = $null
     $script:sysRunspace = $null
     $script:sysHandle = $null
-
-    # 仅在无值时显示加载中，避免覆盖已有数据
     $cpuEl = $window.FindName("CpuUsageValue")
     $memEl = $window.FindName("MemUsageValue")
     $sCpu = $window.FindName("SettingsCpuValue")
@@ -2067,15 +1995,12 @@ function Refresh-SysInfo {
     if ($memEl -and ($memEl.Text -eq "--" -or $memEl.Text -eq "")) { $memEl.Text = "..." }
     if ($sCpu -and ($sCpu.Text -eq "--" -or $sCpu.Text -eq "")) { $sCpu.Text = "..." }
     if ($sMem -and ($sMem.Text -eq "--" -or $sMem.Text -eq "")) { $sMem.Text = "..." }
-
-    # 每次创建独立 Runspace（避免共享 Runspace 导致 Global 作用域损坏）
     $script:sysRunspace = [RunspaceFactory]::CreateRunspace()
     $script:sysRunspace.ApartmentState = "MTA"
     $script:sysRunspace.Open()
     $script:sysPS = [PowerShell]::Create()
     $script:sysPS.Runspace = $script:sysRunspace
     [void]$script:sysPS.AddScript({
-        # 用 Get-WmiObject 代替 Get-Counter，避免性能计数器首次初始化的数秒延迟
         $cpu = (Get-WmiObject Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1).LoadPercentage
         $os = Get-WmiObject Win32_OperatingSystem -ErrorAction SilentlyContinue
         $cpuPct = if ($null -ne $cpu) { [math]::Round($cpu, 1) } else { 0 }
@@ -2083,7 +2008,6 @@ function Refresh-SysInfo {
         "$cpuPct|$memPct"
     })
     $script:sysHandle = $script:sysPS.BeginInvoke()
-
     $script:sysTimer = New-Object System.Windows.Threading.DispatcherTimer
     $script:sysTimer.Interval = [TimeSpan]::FromMilliseconds(300)
     $script:sysTimer.Add_Tick({
@@ -2102,7 +2026,6 @@ function Refresh-SysInfo {
             $script:sysPS = $null
             $script:sysRunspace = $null
             $script:sysHandle = $null
-
             $cpuEl = $window.FindName("CpuUsageValue")
             $memEl = $window.FindName("MemUsageValue")
             $sCpu = $window.FindName("SettingsCpuValue")
@@ -2115,7 +2038,6 @@ function Refresh-SysInfo {
     })
     $script:sysTimer.Start()
 }
-
 function Toggle-AutoStart {
     param([bool]$enable)
     $runKey = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
@@ -2131,39 +2053,26 @@ function Toggle-AutoStart {
         }
     } catch { Add-LogEntry "WARN" "开机自启动设置失败：$($_.Exception.Message)" }
 }
-
-# 初始化加载设置
 Load-Settings
 Update-SplashText "正在加载设置..."
 Update-NavButtons "Dashboard"
-
-# 后台定时刷新 CPU/内存（每 15 秒自动更新，无需切换页面触发）
 $script:autoSysTimer = New-Object System.Windows.Threading.DispatcherTimer
 $script:autoSysTimer.Interval = [TimeSpan]::FromSeconds(15)
 $script:autoSysTimer.Add_Tick({ Refresh-SysInfo })
 $script:autoSysTimer.Start()
-
-# 首次立即查询一次
 Refresh-SysInfo
-
-# 开机自启动开关
 $window.FindName("ChkAutoStart").Add_Click({
     Toggle-AutoStart ([bool]$window.FindName("ChkAutoStart").IsChecked)
     Save-Settings
 })
-
-# CPU/内存显示开关
 $window.FindName("ChkShowSysInfo").Add_Click({
     Update-SysInfoVisibility
     Save-Settings
     if ($window.FindName("ChkShowSysInfo").IsChecked) { Refresh-SysInfo }
 })
-
-# 主题切换
 $window.FindName("RadioDarkTheme").Add_Click({
     Apply-Theme "Dark"
     Update-NavButtons "Settings"
-    # 刷新档位按钮
     $curMode = $window.FindName("SelectedModeValue").Text
     $curName = $window.FindName("SelectedModeName").Text -replace "^当前选择：", ""
     Set-OptimizationMode $curMode $curName
@@ -2172,14 +2081,12 @@ $window.FindName("RadioDarkTheme").Add_Click({
 $window.FindName("RadioLightTheme").Add_Click({
     Apply-Theme "Light"
     Update-NavButtons "Settings"
-    # 刷新档位按钮
     $curMode = $window.FindName("SelectedModeValue").Text
     $curName = $window.FindName("SelectedModeName").Text -replace "^当前选择：", ""
     Set-OptimizationMode $curMode $curName
     Save-Settings
 })
-
-$navNames = @("NavDashboard", "NavTcp", "NavDns", "NavQos", "NavHosts", "NavCustom", "NavTest", "NavDiag", "NavLog", "NavSettings")
+$navNames = @("NavDashboard", "NavTcp", "NavDns", "NavQos", "NavHosts", "NavCustom", "NavTest", "NavLog", "NavHypoMux", "NavSettings")
 foreach ($navName in $navNames) {
     $navEl = $window.FindName($navName)
     if ($navEl) {
@@ -2190,17 +2097,13 @@ foreach ($navName in $navNames) {
         })
     }
 }
-
 function Set-OptimizationMode {
     param(
         [string]$Mode,
         [string]$ModeName
     )
-
     $window.FindName("SelectedModeValue").Text = $Mode
     $window.FindName("SelectedModeName").Text = "当前选择：$ModeName"
-
-    # 主题感知颜色
     if ($script:currentTheme -eq "Light") {
         $selBg = "#5B9BD5"; $selFg = "#FFFFFF"; $selSubFg = "#E3F2FD"
         $unselBg = "#FFFFFF"; $unselFg = "#333333"; $unselSubFg = "#666666"
@@ -2208,14 +2111,12 @@ function Set-OptimizationMode {
         $selBg = "#7CC7FF"; $selFg = "#111111"; $selSubFg = "#222222"
         $unselBg = "#3A3A3A"; $unselFg = "#FFFFFF"; $unselSubFg = "#E8E8E8"
     }
-
     $buttons = @(
         @("BtnModeBalanced", "Balanced"),
         @("BtnModeNormal", "Normal"),
         @("BtnModeComplete", "Complete"),
         @("BtnModeRevert", "Revert")
     )
-
     foreach ($item in $buttons) {
         $button = $window.FindName($item[0])
         if (-not $button) { continue }
@@ -2242,39 +2143,29 @@ function Set-OptimizationMode {
         }
     }
 }
-
 $window.FindName("BtnModeBalanced").Add_Click({ Set-OptimizationMode "Balanced" "均衡（满足日常体验）" })
 $window.FindName("BtnModeNormal").Add_Click({ Set-OptimizationMode "Normal" "普通（优化一部分网络体验）" })
 $window.FindName("BtnModeComplete").Add_Click({ Set-OptimizationMode "Complete" "完全（拥有所有网络优化，可能导致问题）" })
 $window.FindName("BtnModeRevert").Add_Click({ Set-OptimizationMode "Revert" "还原（还原所有修改）" })
 Set-OptimizationMode "Balanced" "均衡（满足日常体验）"
-
-# Optimize button
 $window.FindName("BtnOptimize").Add_Click({
     $selectedMode = $window.FindName("SelectedModeValue").Text
     $selectedModeName = $window.FindName("SelectedModeName").Text.Replace("当前选择：", "")
-
     if ($selectedMode -eq "Revert") {
         $window.FindName("BtnRevert").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
         return
     }
-
     $btn = $window.FindName("BtnOptimize")
     $btn.IsEnabled = $false
     $window.FindName("BtnRevert").IsEnabled = $false
     $window.FindName("BtnSpeedTest").IsEnabled = $false
-
     Add-LogEntry "INFO" "开始应用模式：$selectedModeName"
     $resultsList = $window.FindName("ResultsList")
     if ($resultsList) {
         $resultsList.Items.Clear()
         $resultsList.Items.Add("[INFO] 正在应用模式：$selectedModeName，请稍候...") | Out-Null
     }
-
-    # 保存优化前快照
     Save-PreOptimizationSnapshot | Out-Null
-
-    # Run in background using Runspace
     $runspace = [RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.ThreadOptions = "ReuseThread"
@@ -2288,7 +2179,6 @@ $window.FindName("BtnOptimize").Add_Click({
     $runspace.SessionStateProxy.SetVariable("stateDir", $script:stateDir)
     $runspace.SessionStateProxy.SetVariable("stateFile", $script:stateFile)
     $runspace.SessionStateProxy.SetVariable("stateRegPath", $script:stateRegPath)
-
     $ps = [PowerShell]::Create()
     $ps.Runspace = $runspace
     $ps.AddScript({
@@ -2296,19 +2186,16 @@ $window.FindName("BtnOptimize").Add_Click({
         $statusText = $window.FindName("StatusText")
         $resultsList = $window.FindName("ResultsList")
         $results = [System.Collections.ArrayList]@()
-
         $profileText = switch ($selectedMode) {
             "Balanced" { "均衡" }
             "Normal" { "普通" }
             "Complete" { "完全" }
             default { "均衡" }
         }
-
         $cmds = New-Object System.Collections.ArrayList
         [void]$cmds.Add(@("netsh interface tcp set global autotuninglevel=normal", "TCP 自动调节：normal"))
         [void]$cmds.Add(@("netsh interface tcp set global rss=enabled", "RSS 多核网络处理：启用"))
         [void]$cmds.Add(@("netsh interface tcp set global rsc=enabled", "RSC 接收段合并：启用"))
-
         if ($selectedMode -in @("Normal", "Complete")) {
             [void]$cmds.Add(@("netsh interface tcp set global ecncapability=enabled", "ECN：启用"))
             [void]$cmds.Add(@("netsh interface tcp set global timestamps=disabled", "TCP 时间戳：关闭"))
@@ -2317,11 +2204,9 @@ $window.FindName("BtnOptimize").Add_Click({
             [void]$cmds.Add(@("netsh winsock reset catalog", "Winsock 目录：重置"))
             [void]$cmds.Add(@("netsh int ip reset", "IP 协议栈：重置"))
         }
-
         if ($selectedMode -eq "Complete") {
             [void]$cmds.Add(@("netsh interface tcp set global initialrto=300", "初始 RTO：300ms"))
         }
-
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
         $regPathV6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
         $regs = New-Object System.Collections.ArrayList
@@ -2332,7 +2217,6 @@ $window.FindName("BtnOptimize").Add_Click({
         [void]$regs.Add(@("MaxUserPort", 65534, "最大用户端口"))
         [void]$regs.Add(@("DefaultTTL", 64, "默认 TTL（减少路由跳数开销）"))
         [void]$regs.Add(@("KeepAliveTime", 300000, "TCP 保活超时：5 分钟（更快检测断连）"))
-
         if ($selectedMode -in @("Normal", "Complete")) {
             [void]$regs.Add(@("TcpNoDelay", 1, "禁用 Nagle 算法"))
             [void]$regs.Add(@("TcpAckFrequency", 1, "ACK 频率优化"))
@@ -2340,17 +2224,15 @@ $window.FindName("BtnOptimize").Add_Click({
             [void]$regs.Add(@("TcpTimedWaitDelay", 30, "TIME_WAIT 延迟"))
             [void]$regs.Add(@("TcpHybridAck", 0, "关闭混合 ACK 延迟"))
             [void]$regs.Add(@("MaxFreeTcbs", 65535, "最大空闲 TCP 控制块"))
-            [void]$regs.Add(@("TcpMaxDataRetransmissions", 3, "最大数据重传次数（降低延迟）"))
+            [void]$regs.Add(@("TcpMaxDataRetransmissions", 2, "最大数据重传次数（FPS优化：减少重传等待）"))
+            [void]$regs.Add(@("EnableTcpFastOpen", 1, "TCP Fast Open（降低首包延迟）"))
         }
-
         if ($selectedMode -eq "Complete") {
             [void]$regs.Add(@("DefaultSendWindow", 65535, "默认发送窗口"))
             [void]$regs.Add(@("DefaultReceiveWindow", 65535, "默认接收窗口"))
             [void]$regs.Add(@("MaxConnections", 65536, "最大并发连接数"))
             [void]$regs.Add(@("EnableWsd", 0, "关闭 WSD（Web Services on Devices）"))
         }
-
-        # 关闭节能以太网（Normal 和 Complete 模式，消除延迟抖动）
         if ($selectedMode -in @("Normal", "Complete")) {
             $powerPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Power"
             try {
@@ -2360,10 +2242,8 @@ $window.FindName("BtnOptimize").Add_Click({
                 $results.Add("[FAIL] EnergyEfficientEthernet：$($_.Exception.Message)") | Out-Null
             }
         }
-
         $total = [math]::Max(1, $cmds.Count + $regs.Count + 8)
         $i = 0
-
         foreach ($cmd in $cmds) {
             $i += 1
             $window.Dispatcher.Invoke([Action]{
@@ -2378,7 +2258,6 @@ $window.FindName("BtnOptimize").Add_Click({
             }
             Start-Sleep -Milliseconds 50
         }
-
         foreach ($reg in $regs) {
             $i += 1
             $window.Dispatcher.Invoke([Action]{
@@ -2391,13 +2270,11 @@ $window.FindName("BtnOptimize").Add_Click({
             } catch {
                 $results.Add("[FAIL] $($reg[2])：$($reg[0])") | Out-Null
             }
-            # 同步写入 IPv6 路径
             try {
                 if (-not (Test-Path $regPathV6)) { New-Item -Path $regPathV6 -Force | Out-Null }
                 Set-ItemProperty -Path $regPathV6 -Name $reg[0] -Value $reg[1] -Type DWord -Force -ErrorAction Stop
             } catch {}
         }
-
         if ($selectedMode -in @("Normal", "Complete")) {
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "TCP/IP 服务提供程序：写入网卡接口参数..." })
             $adapters = & $GetActiveAdapters
@@ -2421,7 +2298,6 @@ $window.FindName("BtnOptimize").Add_Click({
                 $i += 1
             }
         }
-
         $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "系统网络调度参数..." })
         if ($selectedMode -eq "Balanced") {
@@ -2441,7 +2317,6 @@ $window.FindName("BtnOptimize").Add_Click({
                 $results.Add("[WARN] 系统调度参数：$spFail 项写入失败") | Out-Null
             }
         }
-
         if ($selectedMode -in @("Normal", "Complete")) {
             $gPath = "$spPath\Tasks\Games"
             $gFail = 0
@@ -2455,7 +2330,6 @@ $window.FindName("BtnOptimize").Add_Click({
                 $results.Add("[WARN] 游戏调度参数：$gFail 项写入失败") | Out-Null
             }
         }
-
         if ($selectedMode -in @("Normal", "Complete")) {
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "QoS 策略..." })
             & $InvokeCommandFunc "netsh qos delete policy name=`"NetOpt_MC_Java_Game`"" | Out-Null
@@ -2466,12 +2340,40 @@ $window.FindName("BtnOptimize").Add_Click({
             else { $results.Add("[WARN] QoS Java 策略添加失败（退出码 $($qosR1.ExitCode)）") | Out-Null }
             if ($qosR2.ExitCode -eq 0) { $results.Add("[OK] QoS：Minecraft Bedrock DSCP=46") | Out-Null }
             else { $results.Add("[WARN] QoS Bedrock 策略添加失败（退出码 $($qosR2.ExitCode)）") | Out-Null }
+            $fpsQosNames = @(
+                "NetOpt_FPS_CS2_Proc", "NetOpt_FPS_CS2_Port",
+                "NetOpt_FPS_Val_Proc", "NetOpt_FPS_Val_Port",
+                "NetOpt_FPS_Apex_Proc", "NetOpt_FPS_Apex_Port",
+                "NetOpt_FPS_CoD_Proc", "NetOpt_FPS_CoD_Port",
+                "NetOpt_FPS_PUBG_Proc", "NetOpt_FPS_R6_Proc", "NetOpt_FPS_R6_Port",
+                "NetOpt_FPS_Roblox_Proc", "NetOpt_FPS_Roblox_Port", "NetOpt_OOPZ_Proc"
+            )
+            $fpsQosAdd = @(
+                'netsh qos add policy name="NetOpt_FPS_CS2_Proc" appname="cs2.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_CS2_Port" protocol=udp localport=27015 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Val_Proc" appname="VALORANT-Win64-Shipping.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Val_Port" protocol=udp localport=7448 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Apex_Proc" appname="r5apex.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Apex_Port" protocol=udp localport=37015 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_CoD_Proc" appname="cod.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_CoD_Port" protocol=udp localport=3074 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_PUBG_Proc" appname="TslGame.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_R6_Proc" appname="RainbowSix.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_R6_Port" protocol=udp localport=6015 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Roblox_Proc" appname="RobloxPlayerBeta.exe" dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_FPS_Roblox_Port" protocol=udp localport=53640,53641,53642,53643,53644,53645 dscp=46 throttleRate=none',
+                'netsh qos add policy name="NetOpt_OOPZ_Proc" appname="oopz.exe" dscp=46 throttleRate=none'
+            )
+            for ($qi = 0; $qi -lt $fpsQosNames.Count; $qi++) {
+                & $InvokeCommandFunc "netsh qos delete policy name=`"$($fpsQosNames[$qi])`"" | Out-Null
+                $fpsR = & $InvokeCommandFunc $fpsQosAdd[$qi]
+                if ($fpsR.ExitCode -eq 0) { $results.Add("[OK] QoS：$($fpsQosNames[$qi]) DSCP=46") | Out-Null }
+                else { $results.Add("[WARN] QoS $($fpsQosNames[$qi]) 失败（退出码 $($fpsR.ExitCode)）") | Out-Null }
+            }
         }
-
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "清理 DNS 缓存..." })
         & $InvokeCommandFunc "ipconfig /flushdns" | Out-Null
         $results.Add("[OK] DNS 缓存已清理") | Out-Null
-
         $window.Dispatcher.Invoke([Action]{
             $progress.Value = 100
             $statusText.Text = "$profileText 模式应用完成！"
@@ -2485,7 +2387,6 @@ $window.FindName("BtnOptimize").Add_Click({
             $window.FindName("BtnRevert").IsEnabled = $true
             $window.FindName("BtnSpeedTest").IsEnabled = $true
         })
-
         try {
             if (-not (Test-Path $stateDir)) {
                 New-Item -Path $stateDir -ItemType Directory -Force | Out-Null
@@ -2508,9 +2409,7 @@ $window.FindName("BtnOptimize").Add_Click({
             & $AddLogEntryFunc "WARN" "保存优化状态失败：$($_.Exception.Message)"
         }
     }) | Out-Null
-
     $handle = $ps.BeginInvoke()
-    # Register a callback to clean up
     Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
         $state = $ps.InvocationStateInfo.State
         if ($state -in @("Completed", "Failed", "Stopped")) {
@@ -2537,21 +2436,16 @@ $window.FindName("BtnOptimize").Add_Click({
         }
     } | Out-Null
 })
-
-# Revert button
 $window.FindName("BtnRevert").Add_Click({
     $window.FindName("BtnOptimize").IsEnabled = $false
     $window.FindName("BtnRevert").IsEnabled = $false
     Add-LogEntry "INFO" "正在还原所有优化..."
-
-    # 查找最新快照
     $snapPath = Find-LatestSnapshot
     if ($snapPath) {
         Add-LogEntry "INFO" "找到优化前快照：$snapPath"
     } else {
         Add-LogEntry "WARN" "未找到优化前快照，将使用默认值还原（可能无法精确恢复原配置）"
     }
-
     $runspace = [RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.Open()
@@ -2562,19 +2456,14 @@ $window.FindName("BtnRevert").Add_Click({
     $runspace.SessionStateProxy.SetVariable("Restore-FromSnapshot", ${function:Restore-FromSnapshot})
     $runspace.SessionStateProxy.SetVariable("stateFile", $script:stateFile)
     $runspace.SessionStateProxy.SetVariable("stateRegPath", $script:stateRegPath)
-
     $ps = [PowerShell]::Create()
     $ps.Runspace = $runspace
     $ps.AddScript({
         $progress = $window.FindName("ProgressBar")
         $statusText = $window.FindName("StatusText")
         $reportLines = [System.Collections.ArrayList]@()
-
-        # 如果有快照，优先从快照恢复
         if ($snapPath -and (Test-Path $snapPath)) {
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在从快照恢复..."; $progress.Value = 10 })
-
-            # 1. 恢复 TCP 全局设置
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "从快照恢复 TCP..."; $progress.Value = 20 })
             $tcpFile = Join-Path $snapPath "tcp_global.txt"
             $tcpOk = $true
@@ -2604,8 +2493,6 @@ $window.FindName("BtnRevert").Add_Click({
                 [void]$reportLines.Add("[SKIP] 无 TCP 快照文件")
                 $tcpOk = $false
             }
-
-            # 2. 恢复注册表参数
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "从快照恢复注册表..."; $progress.Value = 35 })
             $regFile = Join-Path $snapPath "tcpip_registry.txt"
             if (Test-Path $regFile) {
@@ -2626,13 +2513,11 @@ $window.FindName("BtnRevert").Add_Click({
                             } catch { $regFail++; & $AddLogEntryFunc "WARN" "注册表恢复失败：$ipVer$name" }
                         }
                     }
-                    # 删除快照中不存在的优化参数（IPv4 + IPv6）
                     $optParams = @("TcpNoDelay","EnableTCPNoDelay","TcpAckFrequency","TcpDelAckTicks","Tcp1323Opts","SackOpts","EnableTCPChimney","DefaultSendWindow","DefaultReceiveWindow","MaxUserPort","TcpTimedWaitDelay","KeepAliveTime","TcpHybridAck","TcpWindowSize","MaxConnections","EnableConnectionRateLimiting","EnableTcpFastOpen","DefaultTTL","MaxFreeTcbs","TcpMaxDataRetransmissions","EnableWsd")
                     foreach ($pn in $optParams) {
                         if ($pn -notin $snapNamesV4) { try { Remove-ItemProperty -Path $regPathV4 -Name $pn -Force -ErrorAction Stop } catch {} }
                         if ($pn -notin $snapNamesV6) { try { Remove-ItemProperty -Path $regPathV6 -Name $pn -Force -ErrorAction Stop } catch {} }
                     }
-                    # 还原拥塞控制为 CUBIC
                     & $InvokeCommandFunc "netsh interface tcp set supplemental Template=Internet CongestionProvider=cubic" | Out-Null
                     [void]$reportLines.Add("[OK] 注册表参数已从快照恢复（$restored 项，IPv4+IPv6）$(if ($regFail -gt 0) { "，$regFail 项失败" })")
                 } catch {
@@ -2642,8 +2527,6 @@ $window.FindName("BtnRevert").Add_Click({
             } else {
                 [void]$reportLines.Add("[SKIP] 无注册表快照文件")
             }
-
-            # 3. 恢复系统调度参数
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "从快照恢复系统参数..."; $progress.Value = 50 })
             $spFile = Join-Path $snapPath "system_profile.txt"
             if (Test-Path $spFile) {
@@ -2667,8 +2550,6 @@ $window.FindName("BtnRevert").Add_Click({
             } else {
                 [void]$reportLines.Add("[SKIP] 无系统参数快照文件")
             }
-
-            # 4. 恢复网卡接口参数
             try {
                 Get-NetAdapter -ErrorAction SilentlyContinue | ForEach-Object {
                     $guid = $_.InterfaceGuid
@@ -2681,12 +2562,8 @@ $window.FindName("BtnRevert").Add_Click({
             } catch {
                 & $AddLogEntryFunc "WARN" "网卡接口参数清理出错：$($_.Exception.Message)"
             }
-
-            # 还原节能以太网
             $powerPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Power"
             Remove-ItemProperty -Path $powerPath -Name "EnergyEfficientEthernet" -Force -ErrorAction SilentlyContinue
-
-            # 还原 WinHTTP/WinINet
             @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
               "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
               "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings",
@@ -2694,14 +2571,10 @@ $window.FindName("BtnRevert").Add_Click({
                 Remove-ItemProperty -Path $_ -Name "TcpAutotuning" -Force -ErrorAction SilentlyContinue
                 Remove-ItemProperty -Path $_ -Name "DisableBranchCache" -Force -ErrorAction SilentlyContinue
             }
-
-            # 还原工作站参数
             $lanmanPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters"
             @("DisableBandwidthThrottling","DisableLargeMtu") | ForEach-Object {
                 Remove-ItemProperty -Path $lanmanPath -Name $_ -Force -ErrorAction SilentlyContinue
             }
-
-            # 5. 恢复 DNS（从快照）
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "从快照恢复 DNS..."; $progress.Value = 65 })
             $dnsFile = Join-Path $snapPath "dns.txt"
             if (Test-Path $dnsFile) {
@@ -2739,8 +2612,6 @@ $window.FindName("BtnRevert").Add_Click({
             } else {
                 [void]$reportLines.Add("[SKIP] 无 DNS 快照文件")
             }
-
-            # 6. 恢复 Hosts（从快照）
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "从快照恢复 Hosts..."; $progress.Value = 75 })
             $hostsSnap = Join-Path $snapPath "hosts"
             if (Test-Path $hostsSnap) {
@@ -2753,7 +2624,6 @@ $window.FindName("BtnRevert").Add_Click({
                     [void]$reportLines.Add("[WARN] Hosts 快照恢复失败")
                 }
             } else {
-                # 尝试从备份恢复
                 $hostsBak = Join-Path $env:SystemRoot "System32\drivers\etc\hosts.alit.bak"
                 if (Test-Path $hostsBak) {
                     try {
@@ -2766,11 +2636,8 @@ $window.FindName("BtnRevert").Add_Click({
                     [void]$reportLines.Add("[SKIP] 无 Hosts 快照或备份")
                 }
             }
-
         } else {
-            # 无快照，使用默认值还原
             & $AddLogEntryFunc "INFO" "使用默认值还原（无快照可用）"
-
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在还原 TCP..."; $progress.Value = 20 })
             $tcpRevertCmds = @(
                 @("netsh interface tcp set global autotuninglevel=normal", "TCP 自动调优"),
@@ -2786,7 +2653,6 @@ $window.FindName("BtnRevert").Add_Click({
             }
             if ($tcpFail -eq 0) { [void]$reportLines.Add("[OK] TCP 全局已还原为默认值") }
             else { [void]$reportLines.Add("[WARN] TCP 还原：$tcpFail 项失败") }
-
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在还原注册表..."; $progress.Value = 40 })
             $tcpPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
             $tcpPathV6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
@@ -2795,12 +2661,8 @@ $window.FindName("BtnRevert").Add_Click({
                 try { Remove-ItemProperty -Path $tcpPathV6 -Name $_ -Force -ErrorAction Stop } catch {}
             }
             [void]$reportLines.Add("[OK] 注册表优化参数已删除（IPv4 + IPv6，默认值）")
-
-            # 还原节能以太网
             $powerPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Power"
             Remove-ItemProperty -Path $powerPath -Name "EnergyEfficientEthernet" -Force -ErrorAction SilentlyContinue
-
-            # 还原 WinHTTP/WinINet
             @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
               "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp",
               "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings",
@@ -2808,14 +2670,10 @@ $window.FindName("BtnRevert").Add_Click({
                 Remove-ItemProperty -Path $_ -Name "TcpAutotuning" -Force -ErrorAction SilentlyContinue
                 Remove-ItemProperty -Path $_ -Name "DisableBranchCache" -Force -ErrorAction SilentlyContinue
             }
-
-            # 还原工作站参数
             $lanmanPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters"
             @("DisableBandwidthThrottling","DisableLargeMtu") | ForEach-Object {
                 Remove-ItemProperty -Path $lanmanPath -Name $_ -Force -ErrorAction SilentlyContinue
             }
-
-            # 还原 QoS 策略注册表
             @("HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched",
               "HKLM:\SOFTWARE\Policies\Microsoft\Windows\QoS",
               "HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS") | ForEach-Object {
@@ -2825,7 +2683,6 @@ $window.FindName("BtnRevert").Add_Click({
                     Remove-ItemProperty -Path $_ -Name "DisableBranchCache" -Force -ErrorAction SilentlyContinue
                 }
             }
-
             try {
                 Get-NetAdapter -ErrorAction SilentlyContinue | ForEach-Object {
                     $guid = $_.InterfaceGuid
@@ -2838,7 +2695,6 @@ $window.FindName("BtnRevert").Add_Click({
             } catch {
                 & $AddLogEntryFunc "WARN" "网卡接口参数清理出错：$($_.Exception.Message)"
             }
-
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在还原系统参数..."; $progress.Value = 60 })
             $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
             try {
@@ -2849,8 +2705,6 @@ $window.FindName("BtnRevert").Add_Click({
                 & $AddLogEntryFunc "WARN" "系统调度参数还原失败：$($_.Exception.Message)"
                 [void]$reportLines.Add("[WARN] 系统调度参数还原失败")
             }
-
-            # DNS 恢复为 DHCP
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在恢复 DNS..."; $progress.Value = 75 })
             try {
                 $dnsAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
@@ -2868,8 +2722,6 @@ $window.FindName("BtnRevert").Add_Click({
                 & $AddLogEntryFunc "WARN" "DNS 恢复过程中出错：$($_.Exception.Message)"
                 [void]$reportLines.Add("[WARN] DNS 恢复出错")
             }
-
-            # Hosts 恢复
             $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在恢复 Hosts..."; $progress.Value = 85 })
             $hostsBak = Join-Path $env:SystemRoot "System32\drivers\etc\hosts.alit.bak"
             if (Test-Path $hostsBak) {
@@ -2884,8 +2736,6 @@ $window.FindName("BtnRevert").Add_Click({
                 [void]$reportLines.Add("[SKIP] 无 Hosts 备份文件")
             }
         }
-
-        # 通用：还原所有已连接网卡的 MTU 为 1500（与脚本一致）
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在还原 MTU..."; $progress.Value = 88 })
         try {
             $mtuAdapters = @()
@@ -2915,20 +2765,24 @@ $window.FindName("BtnRevert").Add_Click({
             & $AddLogEntryFunc "WARN" "MTU 还原出错：$($_.Exception.Message)"
             [void]$reportLines.Add("[WARN] MTU 还原出错")
         }
-
-        # 通用：清理所有 QoS 策略
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在清理 QoS 策略..."; $progress.Value = 90 })
         $qosNames = @(
             "NetOpt_MC_Java_Game", "NetOpt_MC_Bedrock_Game",
             "ALit_MC_Java_App", "ALit_MC_Bedrock_App",
-            "ALit_MC_Java_Port", "ALit_MC_Bedrock_Port"
+            "ALit_MC_Java_Port", "ALit_MC_Bedrock_Port",
+            "NetOpt_FPS_CS2_Proc", "NetOpt_FPS_CS2_Port",
+            "NetOpt_FPS_Val_Proc", "NetOpt_FPS_Val_Port",
+            "NetOpt_FPS_Apex_Proc", "NetOpt_FPS_Apex_Port",
+            "NetOpt_FPS_CoD_Proc", "NetOpt_FPS_CoD_Port",
+            "NetOpt_FPS_PUBG_Proc", "NetOpt_FPS_R6_Proc", "NetOpt_FPS_R6_Port",
+            "ALit_PacketSim_FPS_CS2", "ALit_PacketSim_FPS_Val", "ALit_PacketSim_FPS_Apex",
+            "ALit_PacketSim_FPS_CoD", "ALit_PacketSim_FPS_PUBG", "ALit_PacketSim_FPS_R6"
         )
         $qosCleaned = 0
         foreach ($qn in $qosNames) {
             $r = & $InvokeCommandFunc "netsh qos delete policy name=`"$qn`""
             if ($r.ExitCode -eq 0) { $qosCleaned++ }
         }
-        # 清理可能残留的其他 NetOpt_ 前缀策略
         $qosShow = & $InvokeCommandFunc "netsh qos show policy"
         $qosShow.Output -split "`n" | ForEach-Object {
             if ($_ -match 'Name:\s*(NetOpt_\S+|ALit_\S+)') {
@@ -2936,10 +2790,7 @@ $window.FindName("BtnRevert").Add_Click({
             }
         }
         [void]$reportLines.Add("[OK] QoS 策略已全部清理")
-
-        # 刷新 DNS 缓存
         & $InvokeCommandFunc "ipconfig /flushdns" | Out-Null
-
         try {
             if (Test-Path $stateFile) {
                 Remove-Item -LiteralPath $stateFile -Force -ErrorAction Stop
@@ -2950,8 +2801,6 @@ $window.FindName("BtnRevert").Add_Click({
         } catch {
             & $AddLogEntryFunc "WARN" "清理优化状态失败：$($_.Exception.Message)"
         }
-
-        # 显示结果
         $window.Dispatcher.Invoke([Action]{
             $progress.Value = 100
             $statusText.Text = "还原完成！"
@@ -2965,7 +2814,6 @@ $window.FindName("BtnRevert").Add_Click({
             foreach ($r in $reportLines) { $resultsList.Items.Add($r) | Out-Null }
         })
     }) | Out-Null
-
     $handle = $ps.BeginInvoke()
     Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
         if ($ps.InvocationStateInfo.State -eq "Completed") {
@@ -2974,28 +2822,22 @@ $window.FindName("BtnRevert").Add_Click({
             $runspace.Dispose()
         }
     } | Out-Null
-
     Add-LogEntry "INFO" "还原完成"
 })
-
-# Speed Test button
 $window.FindName("BtnSpeedTest").Add_Click({
     $window.FindName("BtnSpeedTest").IsEnabled = $false
     $progress = $window.FindName("ProgressBar")
     $statusText = $window.FindName("StatusText")
     $statusText.Text = "正在运行网速测试..."
-
     $runspace = [RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.Open()
     $runspace.SessionStateProxy.SetVariable("window", $window)
-
     $ps = [PowerShell]::Create()
     $ps.Runspace = $runspace
     $ps.AddScript({
         $progress = $window.FindName("ProgressBar")
         $statusText = $window.FindName("StatusText")
-
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测量延迟..."; $progress.Value = 20 })
         $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
         $pingVal = -1
@@ -3014,7 +2856,6 @@ $window.FindName("BtnSpeedTest").Add_Click({
                 if ($l -match "Average = (\d+)" -or $l -match "平均 = (\d+)") { $pingVal = [int]$Matches[1] }
             }
         }
-
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测试下载..."; $progress.Value = 50 })
         $dlMbps = 0
         try {
@@ -3025,7 +2866,6 @@ $window.FindName("BtnSpeedTest").Add_Click({
                 $dlMbps = [math]::Round(($data.RawContentLength * 8) / 1000000 / $sw.Elapsed.TotalSeconds, 1)
             }
         } catch { $dlMbps = -1 }
-
         $window.Dispatcher.Invoke([Action]{ $statusText.Text = "正在测试上传..."; $progress.Value = 80 })
         $ulMbps = 0
         try {
@@ -3037,7 +2877,6 @@ $window.FindName("BtnSpeedTest").Add_Click({
                 $ulMbps = [math]::Round((5000000 * 8) / 1000000 / $sw.Elapsed.TotalSeconds, 1)
             }
         } catch { $ulMbps = -1 }
-
         $window.Dispatcher.Invoke([Action]{
             $progress.Value = 100
             $statusText.Text = "网速测试完成！"
@@ -3047,7 +2886,6 @@ $window.FindName("BtnSpeedTest").Add_Click({
             $window.FindName("BtnSpeedTest").IsEnabled = $true
         })
     }) | Out-Null
-
     $handle = $ps.BeginInvoke()
     Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
         if ($ps.InvocationStateInfo.State -eq "Completed") {
@@ -3056,11 +2894,8 @@ $window.FindName("BtnSpeedTest").Add_Click({
             $runspace.Dispose()
         }
     } | Out-Null
-
     Add-LogEntry "INFO" "网速测试已开始"
 })
-
-# TCP Refresh
 function BtnRefreshTcp_Click {
     param($sender, $e)
     $tcpText = $window.FindName("TcpSettingsText")
@@ -3070,10 +2905,7 @@ function BtnRefreshTcp_Click {
     $tcpText.Text = $r.Output
     Add-LogEntry "INFO" "TCP 设置已刷新"
 }
-
 $window.FindName("BtnRefreshTcp").Add_Click({ BtnRefreshTcp_Click $args[0] $args[1] })
-
-# DNS buttons
 $script:selectedDnsIndex = -1
 $script:dnsItems = @(
     @{ Button="DnsBtnCloudflare"; Text="DnsTextCloudflare"; Label="Cloudflare"; Primary="1.1.1.1"; Secondary="1.0.0.1"; Base="Cloudflare (1.1.1.1)" },
@@ -3086,7 +2918,6 @@ $script:hostsPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
 $script:hostsBackupPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts.alit.bak"
 $script:hostsStartMarker = "# ===== ALit Hosts Optimizer Start ====="
 $script:hostsEndMarker = "# ===== ALit Hosts Optimizer End ====="
-
 function Update-DnsButtons {
     param([int]$selectedIndex)
     $dnsBtns = @("DnsBtnCloudflare", "DnsBtnGoogle", "DnsBtnAli", "DnsBtn114", "DnsBtnDNSPod")
@@ -3105,7 +2936,6 @@ function Update-DnsButtons {
         }
     }
 }
-
 function Update-DnsLatencyText {
     param([int]$Index, [string]$LatencyText)
     if ($Index -lt 0 -or $Index -ge $script:dnsItems.Count) { return }
@@ -3118,15 +2948,12 @@ function Update-DnsLatencyText {
         $textBlock.Text = "$($item.Base) ----- $LatencyText"
     }
 }
-
 function Remove-AlitHostsBlock {
     param([string]$Content)
     $pattern = "(?s)\r?\n?# ===== ALit Hosts Optimizer Start =====.*?# ===== ALit Hosts Optimizer End =====\r?\n?"
     return [regex]::Replace($Content, $pattern, "`r`n").Trim() + "`r`n"
 }
-
 function Get-OptimizedHosts {
-    # 内嵌的 GZip+Base64 编码 hosts 文件（2606条记录，覆盖 GitHub/Mojang/Google 等域名）
     $b64 = "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"
     try {
         $bytes = [Convert]::FromBase64String($b64)
@@ -3143,7 +2970,6 @@ function Get-OptimizedHosts {
     }
     return $null
 }
-
 function Load-HostsToEditor {
     $editor = $window.FindName("HostsEditorText")
     if (-not $editor) { return }
@@ -3159,7 +2985,6 @@ function Load-HostsToEditor {
         Add-LogEntry "ERROR" "读取 Hosts 失败：$($_.Exception.Message)"
     }
 }
-
 function Save-HostsFromEditor {
     $editor = $window.FindName("HostsEditorText")
     if (-not $editor) { return }
@@ -3176,7 +3001,6 @@ function Save-HostsFromEditor {
         [System.Windows.MessageBox]::Show("保存 Hosts 失败：$($_.Exception.Message)", "错误", "OK", "Error") | Out-Null
     }
 }
-
 function Get-CustomOptimizationItems {
     return @(
         @{ Check="OptTcpNoDelay"; Name="TcpNoDelay"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpNoDelay /t REG_DWORD /d 1 /f') },
@@ -3198,6 +3022,36 @@ function Get-CustomOptimizationItems {
         @{ Check="OptEnableWsdOff"; Name="关闭 EnableWsd"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableWsd /t REG_DWORD /d 0 /f') },
         @{ Check="OptConnRateLimit"; Name="禁用连接速率限制"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableConnectionRateLimiting /t REG_DWORD /d 0 /f') },
         @{ Check="OptAppDscp"; Name="允许应用 DSCP 标记"; Commands=@('reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS" /v "Application DSCP Marking Request" /t REG_SZ /d Allowed /f') },
+        @{ Check="OptFpsQoS"; Name="FPS游戏 QoS DSCP 46"; Commands=@(
+            'netsh qos delete policy name="NetOpt_FPS_CS2_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_CS2_Proc" appname="cs2.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_CS2_Port"',
+            'netsh qos add policy name="NetOpt_FPS_CS2_Port" protocol=udp localport=27015 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Val_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_Val_Proc" appname="VALORANT-Win64-Shipping.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Val_Port"',
+            'netsh qos add policy name="NetOpt_FPS_Val_Port" protocol=udp localport=7448 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Apex_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_Apex_Proc" appname="r5apex.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Apex_Port"',
+            'netsh qos add policy name="NetOpt_FPS_Apex_Port" protocol=udp localport=37015 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_CoD_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_CoD_Proc" appname="cod.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_CoD_Port"',
+            'netsh qos add policy name="NetOpt_FPS_CoD_Port" protocol=udp localport=3074 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_PUBG_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_PUBG_Proc" appname="TslGame.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_R6_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_R6_Proc" appname="RainbowSix.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_R6_Port"',
+            'netsh qos add policy name="NetOpt_FPS_R6_Port" protocol=udp localport=6015 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Roblox_Proc"',
+            'netsh qos add policy name="NetOpt_FPS_Roblox_Proc" appname="RobloxPlayerBeta.exe" dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_FPS_Roblox_Port"',
+            'netsh qos add policy name="NetOpt_FPS_Roblox_Port" protocol=udp localport=53640,53641,53642,53643,53644,53645 dscp=46 throttleRate=none',
+            'netsh qos delete policy name="NetOpt_OOPZ_Proc"',
+            'netsh qos add policy name="NetOpt_OOPZ_Proc" appname="oopz.exe" dscp=46 throttleRate=none'
+        ) },
         @{ Check="OptTcpHybridAck"; Name="TcpHybridAck=0"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpHybridAck /t REG_DWORD /d 0 /f') },
         @{ Check="OptTcpWindowSize"; Name="TcpWindowSize=130000"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSize /t REG_DWORD /d 130000 /f','reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSizeMin /t REG_DWORD /d 130000 /f') },
         @{ Check="OptMaxConnections"; Name="MaxConnections=65536"; Commands=@('reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxConnections /t REG_DWORD /d 65536 /f') },
@@ -3207,10 +3061,9 @@ function Get-CustomOptimizationItems {
         @{ Check="OptWinINetAutoTuning"; Name="WinINet TcpAutotuning=1"; Commands=@('reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings" /v TcpAutotuning /t REG_DWORD /d 1 /f','reg add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Internet Settings" /v TcpAutotuning /t REG_DWORD /d 1 /f') }
     )
 }
-
 function Set-CustomChecks {
     param([bool]$Recommended)
-    $recommendedNames = @("OptTcpNoDelay","OptTcpAckFrequency","OptFastOpen","OptAutoTuning","OptEcn","OptRssTaskOffload","OptNetworkThrottle","OptResponsiveness","OptQoSReserve","OptLanmanThrottle","OptLargeMtu","OptWinHttpAutoTuning","OptTcpHybridAck","OptEnergyEfficient","OptWinINetAutoTuning")
+    $recommendedNames = @("OptTcpNoDelay","OptTcpAckFrequency","OptFastOpen","OptAutoTuning","OptEcn","OptRssTaskOffload","OptNetworkThrottle","OptResponsiveness","OptQoSReserve","OptLanmanThrottle","OptLargeMtu","OptWinHttpAutoTuning","OptTcpHybridAck","OptEnergyEfficient","OptWinINetAutoTuning","OptFpsQoS")
     foreach ($item in Get-CustomOptimizationItems) {
         $cb = $window.FindName($item.Check)
         if ($cb) {
@@ -3218,7 +3071,6 @@ function Set-CustomChecks {
         }
     }
 }
-
 function Apply-CustomOptimizations {
     $items = Get-CustomOptimizationItems
     $selected = @()
@@ -3249,21 +3101,18 @@ function Apply-CustomOptimizations {
     Invoke-Command "ipconfig /flushdns" | Out-Null
     [System.Windows.MessageBox]::Show("自定义优化完成。成功：$ok，可能失败：$fail。部分设置可能需要重启后生效。", "完成", "OK", "Information") | Out-Null
 }
-
 $window.FindName("BtnTestAdapterDeep").Add_Click({
     $btn = $window.FindName("BtnTestAdapterDeep")
     $btn.IsEnabled = $false
     $oldText = $btn.Content
     $btn.Content = "执行中..."
     $results = New-Object System.Collections.ArrayList
-
     try {
         Set-NetOffloadGlobalSetting -ReceiveSideScaling Enabled -TaskOffload Enabled -ErrorAction SilentlyContinue
         $results.Add("[OK] 全局 RSS 与 TaskOffload 已启用") | Out-Null
     } catch {
         $results.Add("[WARN] 全局卸载能力设置失败") | Out-Null
     }
-
     $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
     foreach ($adapter in $adapters) {
         try {
@@ -3272,7 +3121,6 @@ $window.FindName("BtnTestAdapterDeep").Add_Click({
         } catch {
             $results.Add("[WARN] $($adapter.Name)：RSS 不支持或设置失败") | Out-Null
         }
-
         $toggleProps = @(
             @("Interrupt Moderation", "Enabled"),
             @("Energy Efficient Ethernet", "Disabled"),
@@ -3290,7 +3138,6 @@ $window.FindName("BtnTestAdapterDeep").Add_Click({
                 $results.Add("[WARN] $($adapter.Name)：$($p[0]) 未修改") | Out-Null
             }
         }
-
         foreach ($bufferName in @("Receive Buffers", "Transmit Buffers")) {
             $applied = $false
             foreach ($value in @("4096", "2048", "1024", "512")) {
@@ -3309,7 +3156,6 @@ $window.FindName("BtnTestAdapterDeep").Add_Click({
             }
         }
     }
-
     $list = $window.FindName("ResultsList")
     if ($list) {
         $list.Items.Clear()
@@ -3319,13 +3165,7 @@ $window.FindName("BtnTestAdapterDeep").Add_Click({
     $btn.IsEnabled = $true
     [System.Windows.MessageBox]::Show("网卡深层测试优化已完成。部分网卡参数可能需要禁用/启用网卡或重启后生效。", "完成", "OK", "Information") | Out-Null
 })
-
-# ============================================================
-# WinDivert 逐包优化模拟
-# ============================================================
 $script:simPolicyPrefix = "ALit_PacketSim"
-
-# --- 一键模拟 ---
 $window.FindName("BtnSimApply").Add_Click({
     $btn = $window.FindName("BtnSimApply")
     $btn.IsEnabled = $false
@@ -3335,30 +3175,38 @@ $window.FindName("BtnSimApply").Add_Click({
     $sb = New-Object System.Text.StringBuilder
     $okCount = 0
     $failCount = 0
-
     $doQoS = [bool]$window.FindName("ChkSimQoS").IsChecked
     $doProc = [bool]$window.FindName("ChkSimProcPriority").IsChecked
     $doTimer = [bool]$window.FindName("ChkSimTimer").IsChecked
     $doIntr = [bool]$window.FindName("ChkSimInterrupt").IsChecked
     $doRSS  = [bool]$window.FindName("ChkSimRSS").IsChecked
     $doThr  = [bool]$window.FindName("ChkSimThrottle").IsChecked
-
-    # 1. QoS DSCP 46 标记
     if ($doQoS) {
         [void]$sb.AppendLine("=== QoS DSCP 46 标记 ===")
         $qosCmds = @(
             @{ Name="Java_App";   Cmd='netsh qos delete policy name="ALit_PacketSim_Java_App"' },
             @{ Name="Bedrock_App"; Cmd='netsh qos delete policy name="ALit_PacketSim_Bedrock_App"' },
             @{ Name="Java_Port";  Cmd='netsh qos delete policy name="ALit_PacketSim_Java_Port"' },
-            @{ Name="Bedrock_Port"; Cmd='netsh qos delete policy name="ALit_PacketSim_Bedrock_Port"' }
+            @{ Name="Bedrock_Port"; Cmd='netsh qos delete policy name="ALit_PacketSim_Bedrock_Port"' },
+            @{ Name="FPS_CS2"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_CS2"' },
+            @{ Name="FPS_Val"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_Val"' },
+            @{ Name="FPS_Apex"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_Apex"' },
+            @{ Name="FPS_CoD"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_CoD"' },
+            @{ Name="FPS_PUBG"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_PUBG"' },
+            @{ Name="FPS_R6"; Cmd='netsh qos delete policy name="ALit_PacketSim_FPS_R6"' }
         )
         foreach ($q in $qosCmds) { Invoke-Command $q.Cmd | Out-Null }
-
         $addCmds = @(
             @{ Name="Java_App";   Cmd='netsh qos add policy name="ALit_PacketSim_Java_App" appPath="javaw.exe" dscp=46 throttleRate=none' },
             @{ Name="Bedrock_App"; Cmd='netsh qos add policy name="ALit_PacketSim_Bedrock_App" appPath="Minecraft.Windows.exe" dscp=46 throttleRate=none' },
             @{ Name="Java_Port";  Cmd='netsh qos add policy name="ALit_PacketSim_Java_Port" protocol=tcp destinationport=25565 dscp=46 throttleRate=none' },
-            @{ Name="Bedrock_Port"; Cmd='netsh qos add policy name="ALit_PacketSim_Bedrock_Port" protocol=udp destinationport=19132 dscp=46 throttleRate=none' }
+            @{ Name="Bedrock_Port"; Cmd='netsh qos add policy name="ALit_PacketSim_Bedrock_Port" protocol=udp destinationport=19132 dscp=46 throttleRate=none' },
+            @{ Name="FPS_CS2"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_CS2" appname="cs2.exe" dscp=46 throttleRate=none' },
+            @{ Name="FPS_Val"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_Val" appname="VALORANT-Win64-Shipping.exe" dscp=46 throttleRate=none' },
+            @{ Name="FPS_Apex"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_Apex" appname="r5apex.exe" dscp=46 throttleRate=none' },
+            @{ Name="FPS_CoD"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_CoD" appname="cod.exe" dscp=46 throttleRate=none' },
+            @{ Name="FPS_PUBG"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_PUBG" appname="TslGame.exe" dscp=46 throttleRate=none' },
+            @{ Name="FPS_R6"; Cmd='netsh qos add policy name="ALit_PacketSim_FPS_R6" appname="RainbowSix.exe" dscp=46 throttleRate=none' }
         )
         foreach ($a in $addCmds) {
             $r = Invoke-Command $a.Cmd
@@ -3372,8 +3220,6 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
-    # 2. 进程优先级提升
     if ($doProc) {
         [void]$sb.AppendLine("=== 进程优先级提升 ===")
         try {
@@ -3392,7 +3238,6 @@ $window.FindName("BtnSimApply").Add_Click({
             } else {
                 [void]$sb.AppendLine("  [INFO] javaw.exe 未运行，已跳过（启动 Minecraft 后再次应用）")
             }
-            # 基岩版
             $bprocs = Get-Process -Name "Minecraft.Windows" -ErrorAction SilentlyContinue
             if ($bprocs) {
                 foreach ($p in $bprocs) {
@@ -3412,8 +3257,6 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
-    # 3. 系统定时器分辨率 0.5ms
     if ($doTimer) {
         [void]$sb.AppendLine("=== 系统定时器 0.5ms ===")
         try {
@@ -3422,8 +3265,7 @@ $window.FindName("BtnSimApply").Add_Click({
             Set-ItemProperty -Path $timerPath -Name "GlobalTimerResolutionRequests" -Value 1 -Type DWord -Force -ErrorAction Stop
             [void]$sb.AppendLine("  [OK] GlobalTimerResolutionRequests=1（允许进程请求高精度定时器）")
             $okCount++
-            # 保存旧值用于还原
-            $simStateDir = Join-Path $env:ProgramData "ALitNetworkOptimizer"
+            $simStateDir = Join-Path "C:\ProgramData" "ALitNetworkOptimizer"
             if (-not (Test-Path $simStateDir)) { New-Item -Path $simStateDir -ItemType Directory -Force | Out-Null }
             $simStateFile = Join-Path $simStateDir "packetsim-state.json"
             $simState = @{}
@@ -3441,8 +3283,6 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
-    # 4. 关闭网卡中断调节
     if ($doIntr) {
         [void]$sb.AppendLine("=== 关闭网卡中断调节 ===")
         try {
@@ -3473,8 +3313,6 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
-    # 5. RSS 队列优化
     if ($doRSS) {
         [void]$sb.AppendLine("=== RSS 队列优化 ===")
         try {
@@ -3485,7 +3323,6 @@ $window.FindName("BtnSimApply").Add_Click({
                         $rss = Get-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*NumRssQueues" -ErrorAction SilentlyContinue
                         if ($rss) {
                             $maxQueues = 4
-                            # 尝试设置 4 队列，失败则尝试 2
                             $setOk = $false
                             try {
                                 Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*NumRssQueues" -RegistryValue 4 -ErrorAction Stop
@@ -3505,7 +3342,6 @@ $window.FindName("BtnSimApply").Add_Click({
                         } else {
                             [void]$sb.AppendLine("  [SKIP] $($adapter.Name): 不支持 RSS 队列设置")
                         }
-                        # 启用 RSS
                         try {
                             Set-NetAdapterRss -Name $adapter.Name -Enabled $true -ErrorAction SilentlyContinue
                         } catch {}
@@ -3523,32 +3359,24 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
-    # 6. 关闭网络节流 + SystemResponsiveness=0
     if ($doThr) {
         [void]$sb.AppendLine("=== 网络节流 + 系统响应 ===")
         try {
             $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
             $oldNTI = (Get-ItemProperty -Path $spPath -Name "NetworkThrottlingIndex" -ErrorAction SilentlyContinue).NetworkThrottlingIndex
             $oldSR  = (Get-ItemProperty -Path $spPath -Name "SystemResponsiveness" -ErrorAction SilentlyContinue).SystemResponsiveness
-
             Set-ItemProperty -Path $spPath -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force -ErrorAction Stop
             Set-ItemProperty -Path $spPath -Name "SystemResponsiveness" -Value 0 -Type DWord -Force -ErrorAction Stop
-
-            # Games Task 加速
             $gamesPath = "$spPath\Tasks\Games"
             Set-ItemProperty -Path $gamesPath -Name "GPU Priority" -Value 8 -Type DWord -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $gamesPath -Name "Priority" -Value 6 -Type DWord -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $gamesPath -Name "Scheduling Category" -Value "High" -Type String -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $gamesPath -Name "SFIO Priority" -Value "High" -Type String -Force -ErrorAction SilentlyContinue
-
             [void]$sb.AppendLine("  [OK] NetworkThrottlingIndex=0xFFFFFFFF（旧值=$oldNTI）")
             [void]$sb.AppendLine("  [OK] SystemResponsiveness=0（旧值=$oldSR）")
             [void]$sb.AppendLine("  [OK] Games Task: GPU=8, Priority=6, Sched=High, SFIO=High")
             $okCount += 3
-
-            # 保存旧值
-            $simStateDir = Join-Path $env:ProgramData "ALitNetworkOptimizer"
+            $simStateDir = Join-Path "C:\ProgramData" "ALitNetworkOptimizer"
             if (-not (Test-Path $simStateDir)) { New-Item -Path $simStateDir -ItemType Directory -Force | Out-Null }
             $simStateFile = Join-Path $simStateDir "packetsim-state.json"
             $simState = @{}
@@ -3567,22 +3395,17 @@ $window.FindName("BtnSimApply").Add_Click({
         }
         [void]$sb.AppendLine("")
     }
-
     [void]$sb.AppendLine("========================================")
     [void]$sb.AppendLine("模拟完成：成功 $okCount 项，失败 $failCount 项")
     [void]$sb.AppendLine("注：QoS DSCP 效果取决于路由器/运营商是否识别；")
     [void]$sb.AppendLine("    进程优先级仅在游戏运行时生效；")
     [void]$sb.AppendLine("    中断调节和 RSS 可能需要禁用/启用网卡生效。")
-
     $resultBox.Text = $sb.ToString()
     Add-LogEntry "INFO" "WinDivert 逐包优化模拟已应用：成功 $okCount，失败 $failCount"
-
     $btn.Content = $oldText
     $btn.IsEnabled = $true
     [System.Windows.MessageBox]::Show("WinDivert 逐包优化模拟已应用。`n成功 $okCount 项，失败 $failCount 项。`n`n点击「检测状态」查看当前生效情况。", "完成", "OK", "Information") | Out-Null
 })
-
-# --- 还原模拟 ---
 $window.FindName("BtnSimRestore").Add_Click({
     $btn = $window.FindName("BtnSimRestore")
     $btn.IsEnabled = $false
@@ -3591,11 +3414,10 @@ $window.FindName("BtnSimRestore").Add_Click({
     $resultBox = $window.FindName("SimResultText")
     $sb = New-Object System.Text.StringBuilder
     $okCount = 0
-
     [void]$sb.AppendLine("=== 还原 WinDivert 模拟 ===")
-
-    # 1. 移除 QoS 策略
-    $qosNames = @("ALit_PacketSim_Java_App", "ALit_PacketSim_Bedrock_App", "ALit_PacketSim_Java_Port", "ALit_PacketSim_Bedrock_Port")
+    $qosNames = @("ALit_PacketSim_Java_App", "ALit_PacketSim_Bedrock_App", "ALit_PacketSim_Java_Port", "ALit_PacketSim_Bedrock_Port",
+                  "ALit_PacketSim_FPS_CS2", "ALit_PacketSim_FPS_Val", "ALit_PacketSim_FPS_Apex",
+                  "ALit_PacketSim_FPS_CoD", "ALit_PacketSim_FPS_PUBG", "ALit_PacketSim_FPS_R6")
     foreach ($qn in $qosNames) {
         $r = Invoke-Command "netsh qos delete policy name=`"$qn`""
         if ($r.ExitCode -eq 0) {
@@ -3603,8 +3425,6 @@ $window.FindName("BtnSimRestore").Add_Click({
             $okCount++
         }
     }
-
-    # 2. 还原进程优先级
     try {
         $procs = Get-Process -Name "javaw" -ErrorAction SilentlyContinue
         if ($procs) {
@@ -3623,9 +3443,7 @@ $window.FindName("BtnSimRestore").Add_Click({
     } catch {
         [void]$sb.AppendLine("  [FAIL] 进程优先级还原: $($_.Exception.Message)")
     }
-
-    # 3. 还原定时器
-    $simStateFile = Join-Path $env:ProgramData "ALitNetworkOptimizer\packetsim-state.json"
+    $simStateFile = Join-Path "C:\ProgramData" "ALitNetworkOptimizer\packetsim-state.json"
     $simState = @{}
     if (Test-Path $simStateFile) {
         try {
@@ -3642,8 +3460,6 @@ $window.FindName("BtnSimRestore").Add_Click({
     } catch {
         [void]$sb.AppendLine("  [FAIL] 定时器还原: $($_.Exception.Message)")
     }
-
-    # 4. 还原网卡中断调节
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
         if ($adapters) {
@@ -3661,8 +3477,6 @@ $window.FindName("BtnSimRestore").Add_Click({
     } catch {
         [void]$sb.AppendLine("  [FAIL] 中断调节还原: $($_.Exception.Message)")
     }
-
-    # 5. 还原 RSS 队列
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
         if ($adapters) {
@@ -3670,7 +3484,6 @@ $window.FindName("BtnSimRestore").Add_Click({
                 try {
                     $rss = Get-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*NumRssQueues" -ErrorAction SilentlyContinue
                     if ($rss) {
-                        # 还原为最大可用值（由驱动决定）
                         $validValues = $rss.ValidDisplayValues
                         if ($validValues -and $validValues.Count -gt 0) {
                             $maxVal = ($validValues | Select-Object -Last 1)
@@ -3685,8 +3498,6 @@ $window.FindName("BtnSimRestore").Add_Click({
     } catch {
         [void]$sb.AppendLine("  [FAIL] RSS 还原: $($_.Exception.Message)")
     }
-
-    # 6. 还原网络节流和系统响应
     try {
         $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
         $ntiOld = if ($simState.ContainsKey("NTIOld")) { $simState["NTIOld"] } else { 10 }
@@ -3699,18 +3510,14 @@ $window.FindName("BtnSimRestore").Add_Click({
     } catch {
         [void]$sb.AppendLine("  [FAIL] 网络节流还原: $($_.Exception.Message)")
     }
-
     [void]$sb.AppendLine("")
     [void]$sb.AppendLine("还原完成：$okCount 项已恢复")
     $resultBox.Text = $sb.ToString()
     Add-LogEntry "INFO" "WinDivert 逐包优化模拟已还原"
-
     $btn.Content = $oldText
     $btn.IsEnabled = $true
     [System.Windows.MessageBox]::Show("WinDivert 模拟已还原，$okCount 项已恢复默认。", "完成", "OK", "Information") | Out-Null
 })
-
-# --- 检测状态 ---
 $window.FindName("BtnSimStatus").Add_Click({
     $btn = $window.FindName("BtnSimStatus")
     $btn.IsEnabled = $false
@@ -3718,11 +3525,8 @@ $window.FindName("BtnSimStatus").Add_Click({
     $btn.Content = "检测中..."
     $resultBox = $window.FindName("SimResultText")
     $sb = New-Object System.Text.StringBuilder
-
     [void]$sb.AppendLine("=== WinDivert 模拟状态检测 ===")
     [void]$sb.AppendLine("")
-
-    # 1. QoS 策略
     [void]$sb.AppendLine("--- QoS DSCP 策略 ---")
     $qosShow = Invoke-Command "netsh qos show policy"
     $qosOutput = $qosShow.Output
@@ -3733,8 +3537,6 @@ $window.FindName("BtnSimStatus").Add_Click({
         [void]$sb.AppendLine("  未找到模拟 QoS 策略（未应用或已被移除）")
     }
     [void]$sb.AppendLine("")
-
-    # 2. 进程优先级
     [void]$sb.AppendLine("--- 进程优先级 ---")
     $procs = Get-Process -Name "javaw" -ErrorAction SilentlyContinue
     if ($procs) {
@@ -3753,8 +3555,6 @@ $window.FindName("BtnSimStatus").Add_Click({
         [void]$sb.AppendLine("  Minecraft.Windows 未运行")
     }
     [void]$sb.AppendLine("")
-
-    # 3. 定时器
     [void]$sb.AppendLine("--- 系统定时器 ---")
     try {
         $timerPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel"
@@ -3768,8 +3568,6 @@ $window.FindName("BtnSimStatus").Add_Click({
         [void]$sb.AppendLine("  无法读取定时器设置")
     }
     [void]$sb.AppendLine("")
-
-    # 4. 网卡中断调节 + RSS
     [void]$sb.AppendLine("--- 网卡参数 ---")
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
@@ -3797,8 +3595,6 @@ $window.FindName("BtnSimStatus").Add_Click({
         [void]$sb.AppendLine("  网卡参数读取失败: $($_.Exception.Message)")
     }
     [void]$sb.AppendLine("")
-
-    # 5. 网络节流
     [void]$sb.AppendLine("--- 网络节流 / 系统响应 ---")
     try {
         $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -3816,24 +3612,17 @@ $window.FindName("BtnSimStatus").Add_Click({
     } catch {
         [void]$sb.AppendLine("  读取失败: $($_.Exception.Message)")
     }
-
     $resultBox.Text = $sb.ToString()
     Add-LogEntry "INFO" "WinDivert 模拟状态检测已完成"
-
     $btn.Content = $oldText
     $btn.IsEnabled = $true
 })
-
-# ============================================================
-# WinDivert 真实模式 - 内核级逐包 DSCP 标记
-# ============================================================
 $script:wdProcess = $null
-$script:wdDir = Join-Path $env:ProgramData "ALitNetworkOptimizer\WinDivert"
-
-# C# 逐包标记器源码
+$script:wdDir = Join-Path ([System.IO.Path]::GetTempPath()) "ALitNetworkOptimizer\WinDivert"
 $script:wdCsSource = @'
-// WinDivert 逐包 DSCP 标记器
+// WinDivert 逐包优化引擎 V3 - 多模式增强版
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -3860,10 +3649,9 @@ class WinDivertMarker
     {
         public long Timestamp;
         public uint Layer_Events_Flags;
-        public uint Reserved1; public uint Reserved2; public uint Reserved3;
-        public uint Reserved4; public uint Reserved5; public uint Reserved6;
-        public uint Reserved7; public uint Reserved8; public uint Reserved9;
-        public uint Reserved10;
+        public uint IfIdx;
+        public uint SubIfIdx;
+        public uint pad0, pad1, pad2, pad3, pad4, pad5, pad6, pad7, pad8, pad9, pad10;
     }
 
     const int WINDIVERT_LAYER_NETWORK = 0;
@@ -3871,28 +3659,106 @@ class WinDivertMarker
     const int WINDIVERT_PARAM_QUEUE_LENGTH = 0;
     const int WINDIVERT_PARAM_QUEUE_TIME = 1;
     const int WINDIVERT_PARAM_QUEUE_SIZE = 2;
+    const uint FLAG_OUTBOUND = (1u << 17);
+    const uint FLAG_IPV6 = (1u << 20);
+
+    // 模式配置: 0=普通 1=最佳 2=急速 3=狂暴 4=Backtrack
+    static string[] modeNames = { "\u666e\u901a\u6a21\u5f0f", "\u6700\u4f73\u6a21\u5f0f", "\u6025\u901f\u6a21\u5f0f", "\u72c2\u66b4\u6a21\u5f0f", "Backtrack", "FPS\u7cbe\u786e" };
+    static bool[] modeBidir = { false, true, true, true, true, true };
+    static bool[] modeAck = { false, true, true, true, true, true };
+    static bool[] modeWin = { false, false, true, true, true, true };
+    static bool[] modeFec = { false, false, false, true, true, true };
+    static bool[] modeBt = { false, false, false, false, true, true };
+    static bool[] modeUdpFec = { false, false, true, true, true, true };
+    static bool[] modeTripleFec = { false, false, false, false, false, true };
+    static bool[] modeUdpBt = { false, false, false, false, false, true };
+    static uint[] modeBtDelay = { 15, 15, 15, 15, 15, 5 };
+    static uint[] modeQTime = { 100, 50, 20, 10, 5, 1 };
+    static uint[] modeQLen = { 16384, 16384, 8192, 32768, 65536, 4096 };
+    static uint[] modeQSize = { 33554432, 33554432, 16777216, 67108864, 134217728, 4194304 };
 
     static IntPtr handle = IntPtr.Zero;
     static volatile bool running = true;
     static long totalPackets = 0;
     static long modifiedPackets = 0;
+    static long ackPackets = 0;
+    static long tcpPackets = 0;
+    static long udpPackets = 0;
+    static long inboundPackets = 0;
+    static long outboundPackets = 0;
+    static long fecPackets = 0;
+    static long btPackets = 0;
+    static long btRecovered = 0;
     static DateTime startTime;
+    static uint adaptiveQTime = 100;
+    static long lastTotal = 0;
+    static DateTime lastStatsTime;
+    static int currentMode = 0;
+    static uint currentBaseQTime = 100;
+
+    // FEC path switching - alternate DSCP for duplicate packets
+    static int dscpAltCounter = 0;
+    static byte[] altTosValues = { 0xB8, 0x88, 0xC0, 0xA0 };
+
+    // Backtrack buffer for delayed packet recovery
+    struct BtEntry { public byte[] Data; public uint Len; public WINDIVERT_ADDRESS Addr; public DateTime Ts; public uint Seq; }
+    static Queue<BtEntry> btBuffer = new Queue<BtEntry>();
+    static uint lastAckSeq = 0;
+
+    // UDP Backtrack buffer for FPS mode - delayed re-injection of UDP game packets
+    struct UdpBtEntry { public byte[] Data; public uint Len; public WINDIVERT_ADDRESS Addr; public DateTime Ts; }
+    static Queue<UdpBtEntry> udpBtBuffer = new Queue<UdpBtEntry>();
+    static long udpBtPackets = 0;
+    static long udpBtRecovered = 0;
+
+    // Jitter tracking
+    static Queue<double> recentJitter = new Queue<double>();
+    static DateTime lastPktTime = DateTime.MinValue;
+    static double currentJitter = 0;
 
     static void Main(string[] args)
     {
-        int tcpPort = 25565, udpPort = 19132;
+        int mode = 0;
         byte dscpValue = 46;
+        List<int> tcpPorts = new List<int>();
+        tcpPorts.Add(25565);
+        List<int> udpPorts = new List<int>();
+        udpPorts.Add(19132);
+
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--tcp" && i + 1 < args.Length) int.TryParse(args[++i], out tcpPort);
-            else if (args[i] == "--udp" && i + 1 < args.Length) int.TryParse(args[++i], out udpPort);
+            if (args[i] == "--mode" && i + 1 < args.Length) { int m; if (int.TryParse(args[++i], out m)) mode = m; }
+            else if (args[i] == "--tcp" && i + 1 < args.Length) ParsePorts(args[++i], tcpPorts);
+            else if (args[i] == "--udp" && i + 1 < args.Length) ParsePorts(args[++i], udpPorts);
             else if (args[i] == "--dscp" && i + 1 < args.Length) { byte d; if (byte.TryParse(args[++i], out d)) dscpValue = d; }
+            else if (args[i] == "--accel") { Console.WriteLine("[WD] \u52a0\u901f\u5668\u517c\u5bb9\u6a21\u5f0f\u5df2\u542f\u7528"); }
         }
+        if (mode < 0) mode = 0;
+        if (mode > 5) mode = 5;
+
         byte tosValue = (byte)(dscpValue << 2);
-        string filter = string.Format("outbound and (tcp.DstPort == {0} or tcp.SrcPort == {0} or udp.DstPort == {1} or udp.SrcPort == {1})", tcpPort, udpPort);
+        bool bidir = modeBidir[mode];
+        bool ackPri = modeAck[mode];
+        bool winOpt = modeWin[mode];
+        bool fecEn = modeFec[mode];
+        bool btEn = modeBt[mode];
+        bool udpFecEn = modeUdpFec[mode];
+        bool tripleFecEn = modeTripleFec[mode];
+        bool udpBtEn = modeUdpBt[mode];
+        uint btDelay = modeBtDelay[mode];
+        uint qTime = modeQTime[mode];
+        uint qLen = modeQLen[mode];
+        uint qSize = modeQSize[mode];
+        adaptiveQTime = qTime;
+
+        string filter = BuildFilter(tcpPorts, udpPorts, bidir);
 
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.WriteLine("[WD] 启动 | 过滤器: {0} | DSCP={1} TOS=0x{2:X2}", filter, dscpValue, tosValue);
+        Console.WriteLine("[WD] \u6a21\u5f0f: {0} | DSCP={1} TOS=0x{2:X2} | \u53cc\u5411={3} ACK={4} TCP\u7a97\u53e3={5} FEC={6} BT={7} UDP-FEC={8} 3xFEC={9} UDP-BT={10} BT\u5ef6\u8fdf={11}ms",
+            modeNames[mode], dscpValue, tosValue, bidir, ackPri, winOpt, fecEn, btEn, udpFecEn, tripleFecEn, udpBtEn, btDelay);
+        Console.WriteLine("[WD] \u8fc7\u6ee4\u5668: {0}", filter);
+        Console.WriteLine("[WD] TCP\u7aef\u53e3: {0} | UDP\u7aef\u53e3: {1}",
+            string.Join(",", tcpPorts.ToArray()), string.Join(",", udpPorts.ToArray()));
 
         ConsoleCancelEventHandler handler = (s, e) => { e.Cancel = true; running = false; if (handle != IntPtr.Zero) WinDivertShutdown(handle, WINDIVERT_SHUTDOWN_RECV); };
         Console.CancelKeyPress += handler;
@@ -3901,75 +3767,783 @@ class WinDivertMarker
         if (handle == IntPtr.Zero || handle == (IntPtr)(-1))
         {
             int err = Marshal.GetLastWin32Error();
-            Console.WriteLine("[WD] ERROR: 无法打开句柄 Error={0}", err);
+            Console.WriteLine("[WD] ERROR: \u65e0\u6cd5\u6253\u5f00\u53e5\u67c4 Error={0}", err);
             return;
         }
-        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_LENGTH, 16384);
-        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_TIME, 100);
-        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_SIZE, 33554432);
-        Console.WriteLine("[WD] 句柄已打开，开始逐包拦截...");
+        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_LENGTH, qLen);
+        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_TIME, qTime);
+        WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_SIZE, qSize);
+        Console.WriteLine("[WD] [{0}] \u53e5\u67c4\u5df2\u6253\u5f00\uff0c\u5f00\u59cb\u9010\u5305\u4f18\u5316...", modeNames[mode]);
         startTime = DateTime.Now;
+        lastStatsTime = startTime;
+        currentMode = mode;
+        currentBaseQTime = qTime;
         byte[] packet = new byte[65575];
         WINDIVERT_ADDRESS addr = new WINDIVERT_ADDRESS();
         uint recvLen;
-        DateTime lastReport = DateTime.Now;
+        DateTime lastReport = startTime;
+
+        Thread statsThread = new Thread(() => {
+            while (running) {
+                Thread.Sleep(5000);
+                if (!running) break;
+                AdaptiveOptimize(currentBaseQTime, currentMode);
+                TimeSpan el = DateTime.Now - startTime;
+                double rate = el.TotalSeconds > 0 ? totalPackets / el.TotalSeconds : 0;
+                Console.WriteLine("[WD] [{0}] 运行{1:F0}s | 总包{2} | 优化{3} | TCP:{4} UDP:{5} ACK:{6} FEC:{7} BT:{8} 恢复:{9} UDP-BT:{10} U恢复:{11} | {12:F1}pkt/s | 队列{13}ms | 抖动{14:F1}ms",
+                    modeNames[currentMode], el.TotalSeconds, totalPackets, modifiedPackets, tcpPackets, udpPackets, ackPackets, fecPackets, btPackets, btRecovered, udpBtPackets, udpBtRecovered, rate, adaptiveQTime, currentJitter);
+            }
+        });
+        statsThread.IsBackground = true;
+        statsThread.Start();
 
         while (running)
         {
             if (!WinDivertRecv(handle, packet, (uint)packet.Length, out recvLen, ref addr))
             {
-                if (running) Console.WriteLine("[WD] 接收失败 Error={0}", Marshal.GetLastWin32Error());
+                if (running)
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    if (err != 995) Console.WriteLine("[WD] \u63a5\u6536\u5931\u8d25 Error={0}", err);
+                }
                 break;
             }
             totalPackets++;
-            bool modified = false;
-            if (recvLen >= 20)
+            bool isOutbound = (addr.Layer_Events_Flags & FLAG_OUTBOUND) != 0;
+            bool isIPv6 = (addr.Layer_Events_Flags & FLAG_IPV6) != 0;
+            if (isOutbound) outboundPackets++; else inboundPackets++;
+
+            // Jitter tracking
+            DateTime nowPkt = DateTime.Now;
+            if (lastPktTime != DateTime.MinValue)
             {
-                byte version = (byte)((packet[0] >> 4) & 0x0F);
-                if (version == 4 && packet[1] != tosValue) { packet[1] = tosValue; modified = true; }
-                else if (version == 6)
-                {
-                    byte tcH = (byte)((tosValue >> 4) & 0x0F), tcL = (byte)(tosValue & 0x0F);
-                    byte o0 = packet[0], o1 = packet[1];
-                    packet[0] = (byte)((o0 & 0xF0) | tcH);
-                    packet[1] = (byte)((tcL << 4) | (o1 & 0x0F));
-                    if (o0 != packet[0] || o1 != packet[1]) modified = true;
-                }
-                if (modified) { WinDivertHelperCalcChecksums(packet, recvLen, ref addr, 0); modifiedPackets++; }
+                double delta = (nowPkt - lastPktTime).TotalMilliseconds;
+                recentJitter.Enqueue(delta);
+                if (recentJitter.Count > 50) recentJitter.Dequeue();
+                double sum = 0; foreach (var j in recentJitter) sum += j;
+                currentJitter = sum / recentJitter.Count;
             }
-            uint sendLen;
-            if (!WinDivertSend(handle, packet, recvLen, out sendLen, ref addr))
-                Console.WriteLine("[WD] 发送失败 Error={0}", Marshal.GetLastWin32Error());
-            if ((DateTime.Now - lastReport).TotalSeconds >= 5)
+            lastPktTime = nowPkt;
+
+            // Extract protocol and TCP info for FEC/BT
+            int ipHdrLenFec = 0; byte protocolFec = 0; uint tcpSeqFec = 0; uint tcpAckFec = 0;
+            bool isTcpDataFec = false; bool isAckOnlyFec = false;
+            if (!isIPv6 && recvLen >= 20)
             {
-                TimeSpan el = DateTime.Now - startTime;
-                Console.WriteLine("[WD] 运行{0:F0}s | 总包{1} | 已标记{2} | {3:F1}pkt/s", el.TotalSeconds, totalPackets, modifiedPackets, totalPackets / el.TotalSeconds);
-                lastReport = DateTime.Now;
+                ipHdrLenFec = (packet[0] & 0x0F) * 4;
+                if (ipHdrLenFec >= 20 && recvLen >= (uint)(ipHdrLenFec + 20))
+                {
+                    protocolFec = packet[9];
+                    if (protocolFec == 6)
+                    {
+                        int tcpOff = ipHdrLenFec;
+                        tcpSeqFec = (uint)((packet[tcpOff + 4] << 24) | (packet[tcpOff + 5] << 16) | (packet[tcpOff + 6] << 8) | packet[tcpOff + 7]);
+                        tcpAckFec = (uint)((packet[tcpOff + 8] << 24) | (packet[tcpOff + 9] << 16) | (packet[tcpOff + 10] << 8) | packet[tcpOff + 11]);
+                        byte flags = packet[tcpOff + 13];
+                        bool isAck = (flags & 0x10) != 0;
+                        isAckOnlyFec = isAck && ((flags & 0x3F) == 0x10);
+                        uint ipTotal = (uint)((packet[2] << 8) | packet[3]);
+                        int tcpHdrLen = (packet[tcpOff + 12] >> 4) * 4;
+                        if (ipTotal >= (uint)(ipHdrLenFec + tcpHdrLen) && ipTotal <= recvLen)
+                        {
+                            uint payload = ipTotal - (uint)ipHdrLenFec - (uint)tcpHdrLen;
+                            isTcpDataFec = payload > 0;
+                        }
+                    }
+                }
+            }
+
+            // Backtrack: track incoming ACKs to remove buffered packets
+            if (btEn && !isOutbound && isAckOnlyFec)
+            {
+                lastAckSeq = tcpAckFec;
+                while (btBuffer.Count > 0 && btBuffer.Peek().Seq < tcpAckFec)
+                {
+                    btBuffer.Dequeue();
+                }
+            }
+
+            bool modified = ProcessPacket(packet, recvLen, tosValue, bidir, isOutbound, isIPv6, ackPri, winOpt);
+
+            if (modified) { WinDivertHelperCalcChecksums(packet, recvLen, ref addr, 0); modifiedPackets++; }
+
+            uint sendLen;
+            WinDivertSend(handle, packet, recvLen, out sendLen, ref addr);
+
+            // === FEC: duplicate outgoing UDP packets with alternate DSCP (path switching) ===
+            if ((fecEn || udpFecEn) && isOutbound && protocolFec == 17 && recvLen > 0)
+            {
+                int fecCopies = 1;
+                if (tripleFecEn) fecCopies = 2;
+                if (currentJitter > 20.0) fecCopies++;
+                for (int fc = 0; fc < fecCopies; fc++)
+                {
+                    byte[] fecCopy = new byte[recvLen];
+                    Buffer.BlockCopy(packet, 0, fecCopy, 0, (int)recvLen);
+                    byte altTos = altTosValues[(dscpAltCounter + fc) % altTosValues.Length];
+                    if (!isIPv6) fecCopy[1] = altTos;
+                    else { fecCopy[0] = (byte)((fecCopy[0] & 0xF0) | ((altTos >> 4) & 0x0F)); fecCopy[1] = (byte)(((altTos & 0x0F) << 4) | (fecCopy[1] & 0x0F)); }
+                    WINDIVERT_ADDRESS fecAddr = addr;
+                    WinDivertHelperCalcChecksums(fecCopy, recvLen, ref fecAddr, 0);
+                    uint fecSendLen;
+                    WinDivertSend(handle, fecCopy, recvLen, out fecSendLen, ref fecAddr);
+                    fecPackets++;
+                }
+                dscpAltCounter += fecCopies;
+            }
+
+            // === UDP Backtrack: buffer outgoing small UDP packets for delayed re-injection ===
+            if (udpBtEn && isOutbound && protocolFec == 17 && recvLen > 0 && recvLen < 512)
+            {
+                byte[] udpBuf = new byte[recvLen];
+                Buffer.BlockCopy(packet, 0, udpBuf, 0, (int)recvLen);
+                UdpBtEntry udpEntry = new UdpBtEntry { Data = udpBuf, Len = recvLen, Addr = addr, Ts = DateTime.Now };
+                udpBtBuffer.Enqueue(udpEntry);
+                if (udpBtBuffer.Count > 300) udpBtBuffer.Dequeue();
+                udpBtPackets++;
+            }
+
+            // === UDP BT delayed re-injection: re-send buffered UDP packets older than btDelay ms ===
+            if (udpBtEn && udpBtBuffer.Count > 0)
+            {
+                DateTime udpCutoff = DateTime.Now.AddMilliseconds(-(double)btDelay);
+                int udpRecovered = 0;
+                while (udpBtBuffer.Count > 0 && udpBtBuffer.Peek().Ts < udpCutoff)
+                {
+                    UdpBtEntry ue = udpBtBuffer.Dequeue();
+                    byte[] udpRcv = new byte[ue.Len];
+                    Buffer.BlockCopy(ue.Data, 0, udpRcv, 0, (int)ue.Len);
+                    byte udpBoostTos = 0xA0;
+                    if (!isIPv6) udpRcv[1] = udpBoostTos;
+                    WINDIVERT_ADDRESS udpRcvAddr = ue.Addr;
+                    WinDivertHelperCalcChecksums(udpRcv, ue.Len, ref udpRcvAddr, 0);
+                    uint udpRcvSendLen;
+                    WinDivertSend(handle, udpRcv, ue.Len, out udpRcvSendLen, ref udpRcvAddr);
+                    udpBtRecovered++;
+                    udpRecovered++;
+                }
+                if (udpRecovered > 0 && (DateTime.Now - lastReport).TotalSeconds >= 1)
+                {
+                    Console.WriteLine("[WD] UDP-BT \u5ef6\u540e\u6062\u590d: {0}\u4e2a\u5305\u91cd\u53d1 (jitter={1:F1}ms)", udpRecovered, currentJitter);
+                }
+            }
+
+            // === Backtrack: duplicate outgoing TCP data packets + delayed recovery ===
+            if (btEn && isOutbound && isTcpDataFec && recvLen > 0 && recvLen < 60000)
+            {
+                // Redundant duplication: send a copy with alternate DSCP
+                byte[] btCopy = new byte[recvLen];
+                Buffer.BlockCopy(packet, 0, btCopy, 0, (int)recvLen);
+                byte altTos = altTosValues[(dscpAltCounter + 2) % altTosValues.Length];
+                if (!isIPv6) btCopy[1] = altTos;
+                WINDIVERT_ADDRESS btAddr = addr;
+                WinDivertHelperCalcChecksums(btCopy, recvLen, ref btAddr, 0);
+                uint btSendLen;
+                WinDivertSend(handle, btCopy, recvLen, out btSendLen, ref btAddr);
+                btPackets++;
+
+                // Buffer for delayed recovery
+                byte[] bufCopy = new byte[recvLen];
+                Buffer.BlockCopy(packet, 0, bufCopy, 0, (int)recvLen);
+                BtEntry entry = new BtEntry { Data = bufCopy, Len = recvLen, Addr = addr, Ts = DateTime.Now, Seq = tcpSeqFec };
+                btBuffer.Enqueue(entry);
+                if (btBuffer.Count > 200) btBuffer.Dequeue();
+            }
+
+            // === Delayed packet recovery: re-inject unacked packets older than btDelay ms ===
+            if (btEn && btBuffer.Count > 0)
+            {
+                DateTime cutoff = DateTime.Now.AddMilliseconds(-(double)btDelay);
+                int recovered = 0;
+                while (btBuffer.Count > 0 && btBuffer.Peek().Ts < cutoff)
+                {
+                    BtEntry e = btBuffer.Dequeue();
+                    if (e.Seq >= lastAckSeq)
+                    {
+                        byte[] rcv = new byte[e.Len];
+                        Buffer.BlockCopy(e.Data, 0, rcv, 0, (int)e.Len);
+                        byte boostTos = 0xC0;
+                        if (!isIPv6) rcv[1] = boostTos;
+                        WINDIVERT_ADDRESS rcvAddr = e.Addr;
+                        WinDivertHelperCalcChecksums(rcv, e.Len, ref rcvAddr, 0);
+                        uint rcvSendLen;
+                        WinDivertSend(handle, rcv, e.Len, out rcvSendLen, ref rcvAddr);
+                        btRecovered++;
+                        recovered++;
+                    }
+                }
+                if (recovered > 0)
+                {
+                    Console.WriteLine("[WD] BT \u5ef6\u540e\u6062\u590d: {0}\u4e2a\u5305\u91cd\u53d1 (jitter={1:F1}ms)", recovered, currentJitter);
+                }
             }
         }
+        running = false;
         if (handle != IntPtr.Zero && handle != (IntPtr)(-1)) { WinDivertShutdown(handle, WINDIVERT_SHUTDOWN_RECV); Thread.Sleep(100); WinDivertClose(handle); }
         TimeSpan total = DateTime.Now - startTime;
-        Console.WriteLine("[WD] 已停止 | 运行{0:F0}s | 总包{1} | 已标记{2}", total.TotalSeconds, totalPackets, modifiedPackets);
+        Console.WriteLine("[WD] \u5df2\u505c\u6b62 | \u8fd0\u884c{0:F0}s | \u603b\u5305{1} | \u4f18\u5316{2} | FEC:{3} BT:{4} \u6062\u590d:{5} UDP-BT:{6} U\u6062\u590d:{7}", total.TotalSeconds, totalPackets, modifiedPackets, fecPackets, btPackets, btRecovered, udpBtPackets, udpBtRecovered);
+    }
+
+    static void ParsePorts(string s, List<int> list)
+    {
+        list.Clear();
+        string trimmed = s.Trim();
+        if (trimmed == "0" || trimmed.Length == 0) return;
+        string[] parts = s.Split(new char[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string p in parts)
+        {
+            int port;
+            if (int.TryParse(p.Trim(), out port) && port > 0 && port < 65536) list.Add(port);
+        }
+        if (list.Count == 0) list.Add(25565);
+    }
+
+    static string BuildFilter(List<int> tcpPorts, List<int> udpPorts, bool bidir)
+    {
+        List<string> parts = new List<string>();
+        foreach (int p in tcpPorts) { parts.Add(string.Format("tcp.DstPort == {0}", p)); parts.Add(string.Format("tcp.SrcPort == {0}", p)); }
+        foreach (int p in udpPorts) { parts.Add(string.Format("udp.DstPort == {0}", p)); parts.Add(string.Format("udp.SrcPort == {0}", p)); }
+        if (parts.Count == 0) return bidir ? "true" : "outbound";
+        string portFilter = string.Join(" or ", parts.ToArray());
+        if (bidir) return portFilter;
+        return "outbound and (" + portFilter + ")";
+    }
+
+    static bool ProcessPacket(byte[] packet, uint len, byte tosValue, bool bidir, bool isOutbound, bool isIPv6, bool ackPri, bool winOpt)
+    {
+        if (len < 20) return false;
+        bool modified = false;
+        int ipHdrLen;
+        byte protocol;
+
+        if (!isIPv6)
+        {
+            byte version = (byte)((packet[0] >> 4) & 0x0F);
+            if (version != 4) return false;
+            ipHdrLen = (packet[0] & 0x0F) * 4;
+            if (ipHdrLen < 20 || len < ipHdrLen) return false;
+            protocol = packet[9];
+            // FPS: mark small UDP game packets (< 512B) even in non-bidir mode
+            if (bidir || isOutbound || (protocol == 17 && len < 512))
+            {
+                if (packet[1] != tosValue) { packet[1] = tosValue; modified = true; }
+            }
+        }
+        else
+        {
+            byte version = (byte)((packet[0] >> 4) & 0x0F);
+            if (version != 6) return false;
+            ipHdrLen = 40;
+            if (len < ipHdrLen) return false;
+            protocol = packet[6];
+            if (bidir || isOutbound || (protocol == 17 && len < 512))
+            {
+                byte tcH = (byte)((tosValue >> 4) & 0x0F), tcL = (byte)(tosValue & 0x0F);
+                byte o0 = packet[0], o1 = packet[1];
+                packet[0] = (byte)((o0 & 0xF0) | tcH);
+                packet[1] = (byte)((tcL << 4) | (o1 & 0x0F));
+                if (o0 != packet[0] || o1 != packet[1]) modified = true;
+            }
+        }
+
+        if (protocol == 6 && len >= (uint)(ipHdrLen + 20))
+        {
+            tcpPackets++;
+            int tcpOff = ipHdrLen;
+            byte flags = packet[tcpOff + 13];
+            bool isAck = (flags & 0x10) != 0;
+            bool isAckOnly = isAck && ((flags & 0x3F) == 0x10);
+
+            uint payloadLen = 0;
+            if (!isIPv6)
+            {
+                uint ipTotal = (uint)((packet[2] << 8) | packet[3]);
+                int tcpHdrLen = (packet[tcpOff + 12] >> 4) * 4;
+                if (ipTotal >= (uint)(ipHdrLen + tcpHdrLen) && ipTotal <= len)
+                    payloadLen = ipTotal - (uint)ipHdrLen - (uint)tcpHdrLen;
+            }
+            else
+            {
+                uint ipv6Pay = (uint)((packet[4] << 8) | packet[5]);
+                int tcpHdrLen = (packet[tcpOff + 12] >> 4) * 4;
+                if (ipv6Pay >= (uint)tcpHdrLen && (ipv6Pay + 40) <= len)
+                    payloadLen = ipv6Pay - (uint)tcpHdrLen;
+            }
+
+            if (isAckOnly && payloadLen == 0) ackPackets++;
+
+            if (winOpt && isOutbound && isAck && payloadLen == 0 && len >= (uint)(tcpOff + 16))
+            {
+                ushort win = (ushort)((packet[tcpOff + 14] << 8) | packet[tcpOff + 15]);
+                if (win > 65535) { packet[tcpOff + 14] = 0xFF; packet[tcpOff + 15] = 0xFF; modified = true; }
+            }
+        }
+        else if (protocol == 17) udpPackets++;
+
+        return modified;
+    }
+
+    static void AdaptiveOptimize(uint baseQTime, int mode)
+    {
+        if (mode < 2) return;
+        DateTime now = DateTime.Now;
+        double elapsed = (now - lastStatsTime).TotalSeconds;
+        if (elapsed <= 0) return;
+        long delta = totalPackets - lastTotal;
+        double rate = delta / elapsed;
+        lastTotal = totalPackets;
+        lastStatsTime = now;
+        uint target = baseQTime;
+        if (rate > 2000) target = (uint)(baseQTime * 0.3);
+        else if (rate > 1000) target = (uint)(baseQTime * 0.5);
+        else if (rate > 500) target = (uint)(baseQTime * 0.7);
+        uint minQ = (mode >= 5) ? 1u : 5u;
+        if (target < minQ) target = minQ;
+        if (target != adaptiveQTime && handle != IntPtr.Zero && handle != (IntPtr)(-1))
+        {
+            WinDivertSetParam(handle, WINDIVERT_PARAM_QUEUE_TIME, target);
+            adaptiveQTime = target;
+        }
     }
 }
 '@
+$script:hypoMuxCsSource = @'
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using Microsoft.Win32;
 
-# 下载 WinDivert 文件
+class HypoMuxLite
+{
+    class NicInfo
+    {
+        public string Name;
+        public string IP;
+        public int IfIndex;
+        public long Connections;
+        public long BytesUp;
+        public long BytesDown;
+    }
+
+    [DllImport("wininet.dll", SetLastError = true)]
+    static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+
+    static List<NicInfo> nics = new List<NicInfo>();
+    static int nextNic = 0;
+    static TcpListener httpListener;
+    static volatile bool running = false;
+    static DateTime startTime;
+    static long totalConnections = 0;
+    static long totalBytesUp = 0;
+    static long totalBytesDown = 0;
+    static Thread statsThread;
+    static object consoleLock = new object();
+
+    static void Main(string[] args)
+    {
+        if (args.Length > 0 && args[0] == "stop")
+        {
+            RestoreSystemProxy();
+            return;
+        }
+
+        DetectNics();
+        if (nics.Count == 0)
+        {
+            Console.WriteLine("[HM] 未检测到活动网卡");
+            return;
+        }
+
+        Console.WriteLine("[HM] HypoMux Lite - 多网卡带宽聚合代理");
+        Console.WriteLine("[HM] 基于 HypoMux 核心算法 | 原作者: Hypostasis-Cat");
+        Console.WriteLine("[HM] GitHub: https://github.com/Hypostasis-Cat/HypoMux");
+        Console.WriteLine("========================================");
+        Console.WriteLine("[HM] 检测到 {0} 个活动网卡:", nics.Count);
+        for (int i = 0; i < nics.Count; i++)
+            Console.WriteLine("[HM]   [{0}] {1} - {2} (IfIndex={3})", i, nics[i].Name, nics[i].IP, nics[i].IfIndex);
+
+        if (nics.Count < 2)
+            Console.WriteLine("[HM] 警告: 仅1个网卡，无法带宽聚合。代理仍可运行(全部流量走单网卡)。");
+
+        StartProxy();
+    }
+
+    static void DetectNics()
+    {
+        nics.Clear();
+        var allNics = NetworkInterface.GetAllNetworkInterfaces();
+        foreach (var nic in allNics)
+        {
+            if (nic.OperationalStatus != OperationalStatus.Up) continue;
+            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+            var ipProps = nic.GetIPProperties();
+            foreach (var addr in ipProps.UnicastAddresses)
+            {
+                if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    int ifIndex = 0;
+                    try { ifIndex = ipProps.GetIPv4Properties().Index; } catch { }
+                    nics.Add(new NicInfo
+                    {
+                        Name = nic.Name,
+                        IP = addr.Address.ToString(),
+                        IfIndex = ifIndex
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    static void StartProxy()
+    {
+        running = true;
+        startTime = DateTime.Now;
+
+        try
+        {
+            httpListener = new TcpListener(IPAddress.Loopback, 10801);
+            httpListener.Start();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[HM] 代理启动失败: {0}", ex.Message);
+            return;
+        }
+
+        SetSystemProxy(10801);
+
+        statsThread = new Thread(StatsLoop);
+        statsThread.IsBackground = true;
+        statsThread.Start();
+
+        Console.WriteLine("[HM] HTTP代理: 127.0.0.1:10801");
+        Console.WriteLine("[HM] 系统代理已设置");
+        Console.WriteLine("[HM] 按 Enter 停止并恢复...");
+        Console.WriteLine("========================================");
+
+        new Thread(AcceptLoop) { IsBackground = true }.Start();
+
+        Console.ReadLine();
+        Stop();
+    }
+
+    static void AcceptLoop()
+    {
+        while (running)
+        {
+            try
+            {
+                var client = httpListener.AcceptTcpClient();
+                new Thread(() => HandleHTTPClient(client)) { IsBackground = true }.Start();
+            }
+            catch { if (running) continue; else break; }
+        }
+    }
+
+    static NicInfo SelectNic()
+    {
+        NicInfo nic;
+        lock (nics) { nic = nics[nextNic % nics.Count]; nextNic++; }
+        Interlocked.Increment(ref nic.Connections);
+        Interlocked.Increment(ref totalConnections);
+        return nic;
+    }
+
+    static void HandleHTTPClient(TcpClient client)
+    {
+        var nic = SelectNic();
+        try
+        {
+            client.ReceiveTimeout = 30000;
+            client.SendTimeout = 30000;
+            var stream = client.GetStream();
+            byte[] buf = new byte[8192];
+            int totalRead = 0;
+            int headerEnd = -1;
+
+            while (totalRead < 65536)
+            {
+                int n = stream.Read(buf, totalRead, buf.Length - totalRead);
+                if (n <= 0) return;
+                totalRead += n;
+                string s = Encoding.ASCII.GetString(buf, 0, totalRead);
+                headerEnd = s.IndexOf("\r\n\r\n");
+                if (headerEnd >= 0) break;
+                if (totalRead >= buf.Length)
+                {
+                    buf = new byte[buf.Length * 2];
+                }
+            }
+
+            if (headerEnd < 0) return;
+            string headerStr = Encoding.ASCII.GetString(buf, 0, headerEnd + 4);
+            string[] lines = headerStr.Split(new[] { "\r\n" }, StringSplitOptions.None);
+            if (lines.Length < 1) return;
+
+            string[] firstLine = lines[0].Split(' ');
+            if (firstLine.Length < 3) return;
+
+            string method = firstLine[0].ToUpper();
+            string target = firstLine[1];
+
+            string host = null;
+            int port = 80;
+
+            if (method == "CONNECT")
+            {
+                var hp = target.Split(':');
+                host = hp[0];
+                port = hp.Length > 1 ? int.Parse(hp[1]) : 443;
+            }
+            else
+            {
+                try
+                {
+                    var uri = new Uri(target);
+                    host = uri.Host;
+                    port = uri.Port;
+                }
+                catch
+                {
+                    for (int i = 1; i < lines.Length; i++)
+                    {
+                        if (lines[i].ToLower().StartsWith("host:"))
+                        {
+                            var hp = lines[i].Substring(5).Trim().Split(':');
+                            host = hp[0];
+                            port = hp.Length > 1 ? int.Parse(hp[1]) : 80;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(host)) return;
+
+            Socket upstream = ConnectBound(host, port, nic);
+            if (upstream == null) return;
+
+            try
+            {
+                if (method == "CONNECT")
+                {
+                    byte[] resp = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: HypoMuxLite\r\n\r\n");
+                    stream.Write(resp, 0, resp.Length);
+                }
+                else
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine(lines[0]);
+                    for (int i = 1; i < lines.Length; i++)
+                    {
+                        string lower = lines[i].ToLower();
+                        if (lower.StartsWith("proxy-connection:") || lower.StartsWith("proxy-authorization:"))
+                            continue;
+                        sb.AppendLine(lines[i]);
+                    }
+                    sb.AppendLine();
+                    byte[] reqBytes = Encoding.ASCII.GetBytes(sb.ToString());
+                    upstream.Send(reqBytes);
+
+                    int extraStart = headerEnd + 4;
+                    if (totalRead > extraStart)
+                        upstream.Send(buf, extraStart, totalRead - extraStart, SocketFlags.None);
+                }
+
+                Relay(stream, upstream, nic);
+            }
+            finally
+            {
+                try { upstream.Close(); } catch { }
+            }
+        }
+        catch { }
+        finally
+        {
+            try { client.Close(); } catch { }
+        }
+    }
+
+    static Socket ConnectBound(string host, int port, NicInfo nic)
+    {
+        try
+        {
+            IPAddress targetAddr = null;
+            IPAddress parsed;
+            if (IPAddress.TryParse(host, out parsed))
+            {
+                targetAddr = parsed.AddressFamily == AddressFamily.InterNetwork ? parsed : null;
+            }
+            else
+            {
+                foreach (var a in Dns.GetHostAddresses(host))
+                {
+                    if (a.AddressFamily == AddressFamily.InterNetwork) { targetAddr = a; break; }
+                }
+            }
+            if (targetAddr == null) return null;
+
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            socket.ReceiveTimeout = 60000;
+            socket.SendTimeout = 60000;
+
+            socket.Bind(new IPEndPoint(IPAddress.Parse(nic.IP), 0));
+
+            if (nic.IfIndex > 0)
+            {
+                uint ifIndex = (uint)nic.IfIndex;
+                byte[] ifIndexBytes = BitConverter.GetBytes(ifIndex);
+                if (BitConverter.IsLittleEndian) Array.Reverse(ifIndexBytes);
+                socket.SetSocketOption(SocketOptionLevel.IP, (SocketOptionName)31, ifIndexBytes);
+            }
+
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, 1);
+            socket.Connect(targetAddr, port);
+            return socket;
+        }
+        catch { return null; }
+    }
+
+    static void Relay(NetworkStream clientStream, Socket upstream, NicInfo nic)
+    {
+        var upstreamStream = new NetworkStream(upstream, ownsSocket: false);
+        var t1 = new Thread(() =>
+        {
+            try
+            {
+                byte[] b = new byte[65536];
+                int n;
+                while ((n = clientStream.Read(b, 0, b.Length)) > 0)
+                {
+                    upstreamStream.Write(b, 0, n);
+                    Interlocked.Add(ref nic.BytesUp, n);
+                    Interlocked.Add(ref totalBytesUp, n);
+                }
+            }
+            catch { }
+            try { upstream.Shutdown(SocketShutdown.Send); } catch { }
+        }) { IsBackground = true };
+        t1.Start();
+
+        try
+        {
+            byte[] b = new byte[65536];
+            int n;
+            while ((n = upstreamStream.Read(b, 0, b.Length)) > 0)
+            {
+                clientStream.Write(b, 0, n);
+                Interlocked.Add(ref nic.BytesDown, n);
+                Interlocked.Add(ref totalBytesDown, n);
+            }
+        }
+        catch { }
+        try { clientStream.Close(); } catch { }
+        t1.Join();
+    }
+
+    static void StatsLoop()
+    {
+        while (running)
+        {
+            Thread.Sleep(5000);
+            TimeSpan el = DateTime.Now - startTime;
+            double rateUp = totalBytesUp / el.TotalSeconds / 1024;
+            double rateDown = totalBytesDown / el.TotalSeconds / 1024;
+
+            var sb = new StringBuilder();
+            sb.AppendFormat("[HM] 运行{0:F0}s | 连接{1} | {2:F1}KB/s ↑ {3:F1}KB/s ↓ | 总 ↑{4:F0}KB ↓{5:F0}KB",
+                el.TotalSeconds, totalConnections, rateUp, rateDown,
+                totalBytesUp / 1024.0, totalBytesDown / 1024.0);
+
+            foreach (var nic in nics)
+            {
+                sb.AppendFormat("\n[HM]   {0}({1}): 连接{2} ↑{3:F0}KB ↓{4:F0}KB",
+                    nic.Name, nic.IP, nic.Connections,
+                    nic.BytesUp / 1024.0, nic.BytesDown / 1024.0);
+            }
+
+            lock (consoleLock)
+                Console.WriteLine(sb.ToString());
+        }
+    }
+
+    static void SetSystemProxy(int httpPort)
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true))
+            {
+                key.SetValue("ProxyEnable", 1, RegistryValueKind.DWord);
+                key.SetValue("ProxyServer",
+                    string.Format("http=127.0.0.1:{0};https=127.0.0.1:{0}", httpPort),
+                    RegistryValueKind.String);
+                key.SetValue("ProxyOverride",
+                    "<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*",
+                    RegistryValueKind.String);
+            }
+            NotifyProxyChanged();
+        }
+        catch { }
+    }
+
+    static void RestoreSystemProxy()
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true))
+            {
+                key.SetValue("ProxyEnable", 0, RegistryValueKind.DWord);
+                key.DeleteValue("ProxyServer", false);
+            }
+            NotifyProxyChanged();
+            Console.WriteLine("[HM] 系统代理已恢复");
+        }
+        catch { }
+    }
+
+    static void NotifyProxyChanged()
+    {
+        try
+        {
+            InternetSetOption(IntPtr.Zero, 39, IntPtr.Zero, 0);
+            InternetSetOption(IntPtr.Zero, 37, IntPtr.Zero, 0);
+        }
+        catch { }
+    }
+
+    static void Stop()
+    {
+        running = false;
+        try { httpListener.Stop(); } catch { }
+        RestoreSystemProxy();
+        Console.WriteLine("[HM] 代理已停止");
+    }
+}
+'@
 function Ensure-WinDivertFiles {
     if (-not (Test-Path $script:wdDir)) { New-Item -Path $script:wdDir -ItemType Directory -Force | Out-Null }
     $dllPath = Join-Path $script:wdDir "WinDivert.dll"
     $sysPath = Join-Path $script:wdDir "WinDivert64.sys"
-
     if ((Test-Path $dllPath) -and (Test-Path $sysPath)) { return $true }
-
-    # 下载官方包
     $url = 'https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip'
     $zipPath = Join-Path $script:wdDir 'WinDivert.zip'
     try {
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing -TimeoutSec 30
+        $r = Invoke-Command "curl -L -o `"$zipPath`" `"$url`""
+        if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -lt 10000) {
+            throw "curl下载失败"
+        }
         $extractDir = Join-Path $script:wdDir 'temp'
-        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
-        # 复制 x64 文件
+        if (-not (Test-Path $extractDir)) { New-Item -Path $extractDir -ItemType Directory -Force | Out-Null }
+        $r2 = Invoke-Command "tar -xf `"$zipPath`" -C `"$extractDir`" 2>nul"
         $srcDll = Get-ChildItem $extractDir -Recurse -Filter 'WinDivert.dll' | Where-Object { $_.DirectoryName -match 'x64' } | Select-Object -First 1
         $srcSys = Get-ChildItem $extractDir -Recurse -Filter 'WinDivert64.sys' | Where-Object { $_.DirectoryName -match 'x64' } | Select-Object -First 1
         if ($srcDll -and $srcSys) {
@@ -3984,25 +4558,72 @@ function Ensure-WinDivertFiles {
     }
     return $false
 }
-
-# 编译 C# 标记器
 function Compile-WinDivertMarker {
     $csPath = Join-Path $script:wdDir 'WinDivertMarker.cs'
     $exePath = Join-Path $script:wdDir 'WinDivertMarker.exe'
     $script:wdCsSource | Set-Content $csPath -Encoding UTF8 -Force
-
+    Stop-Process -Name "WinDivertMarker" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 200
+    Remove-Item $exePath -Force -ErrorAction SilentlyContinue
     $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     if (-not (Test-Path $csc)) { $csc = 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' }
     if (-not (Test-Path $csc)) { return $null }
-
-    & $csc /nologo /optimize+ /target:exe /platform:x64 /out:$exePath $csPath 2>&1 | Out-Null
+    & $csc /nologo /optimize+ /debug- /target:exe /platform:x64 /out:$exePath $csPath 2>&1 | Out-Null
     if (Test-Path $exePath) { return $exePath }
     return $null
 }
-
-# --- WinDivert handlers ---
-
-# --- Start ---
+function Compile-HypoMuxLite {
+    $hmDir = Join-Path ([System.IO.Path]::GetTempPath()) "HypoMuxLite"
+    if (-not (Test-Path $hmDir)) { New-Item -Path $hmDir -ItemType Directory -Force | Out-Null }
+    $csPath = Join-Path $hmDir "HypoMuxLite.cs"
+    $exePath = Join-Path $hmDir "HypoMuxLite.exe"
+    Stop-Process -Name "HypoMuxLite" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 200
+    Remove-Item $exePath -Force -ErrorAction SilentlyContinue
+    $script:hypoMuxCsSource | Set-Content $csPath -Encoding UTF8 -Force
+    $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    if (-not (Test-Path $csc)) { $csc = 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' }
+    if (-not (Test-Path $csc)) { return $null }
+    $refDir = [System.IO.Path]::Combine([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory(), "System.dll")
+    & $csc /nologo /optimize+ /debug- /target:exe /platform:x64 /out:$exePath /reference:System.dll $csPath 2>&1 | Out-Null
+    if (Test-Path $exePath) { return $exePath }
+    return $null
+}
+$wdModeNames = @('普通模式', '最佳模式', '急速模式', '狂暴模式', 'Backtrack模式', 'FPS精确模式')
+function Set-WdMode {
+    param([int]$Mode)
+    $window.FindName("WdModeLabel").Text = "$Mode"
+    for ($i = 0; $i -lt 6; $i++) {
+        $btn = $window.FindName("WdModeBtn$i")
+        if (-not $btn) { continue }
+        if ($i -eq $Mode) {
+            $btn.Background = Create-Brush "#7CC7FF"
+            $btn.Foreground = Create-Brush "#111111"
+        } else {
+            $btn.Background = Create-Brush "#3A3A3A"
+            $btn.Foreground = Create-Brush "#E8E8E8"
+        }
+    }
+    if ($Mode -eq 5) {
+        $tcpBox = $window.FindName("WdTcpPort")
+        $udpBox = $window.FindName("WdUdpPort")
+        $curTcp = if ($tcpBox) { $tcpBox.Text } else { "" }
+        if ($curTcp -eq "25565" -or [string]::IsNullOrWhiteSpace($curTcp)) {
+            if ($tcpBox) { $tcpBox.Text = "" }
+            if ($udpBox) { $udpBox.Text = "27015,27017,27018,27019,27020,27036,3074,7448,37015,6015" }
+            $lbl = $window.FindName("WdModeLabel")
+            if ($lbl) {
+                $lbl.ToolTip = "FPS模式: 已自动设置常见FPS游戏UDP端口 (CS2/Valorant/Apex/CoD/PUBG/R6)"
+            }
+        }
+    }
+}
+for ($mi = 0; $mi -lt 6; $mi++) {
+    $wdBtn = $window.FindName("WdModeBtn$mi")
+    if ($wdBtn) {
+        $wdBtn.Add_Click({ param($s, $e); Set-WdMode ([int]$s.Tag) })
+    }
+}
 $window.FindName("BtnWdStart").Add_Click({
     $btnStart = $window.FindName("BtnWdStart")
     $btnStop = $window.FindName("BtnWdStop")
@@ -4010,7 +4631,58 @@ $window.FindName("BtnWdStart").Add_Click({
     $tcpPortBox = $window.FindName("WdTcpPort")
     $udpPortBox = $window.FindName("WdUdpPort")
     $dscpBox = $window.FindName("WdDscp")
-
+    $modeBox = $window.FindName("WdModeLabel")
+    # 账号密码验证
+    if (-not $script:wdAuthed) {
+        $authWin = New-Object System.Windows.Window
+        $authWin.WindowStyle = "None"
+        $authWin.AllowsTransparency = $true
+        $authWin.Background = [System.Windows.Media.Brushes]::Transparent
+        $authWin.WindowStartupLocation = "CenterScreen"
+        $authWin.Width = 360; $authWin.Height = 260
+        $authWin.ResizeMode = "NoResize"
+        $authXaml = @"
+<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Background="#1E1E1E" CornerRadius="12" BorderBrush="#3A3A3A" BorderThickness="1">
+  <StackPanel Margin="24,20,24,20">
+    <TextBlock Text="WinDivert 授权验证" FontSize="18" FontWeight="Bold" Foreground="#E8E8E8"
+               HorizontalAlignment="Center" Margin="0,0,0,16" FontFamily="HarmonyOS Sans SC, Microsoft YaHei"/>
+    <TextBlock Text="用户名" FontSize="12" Foreground="#888888" Margin="0,0,0,4"/>
+    <TextBox x:Name="AuthUser" FontSize="14" Padding="8,6" Background="#2A2A2A" Foreground="#E8E8E8"
+             BorderBrush="#444444" BorderThickness="1" CaretBrush="#7CC7FF"/>
+    <TextBlock Text="密码" FontSize="12" Foreground="#888888" Margin="0,10,0,4"/>
+    <PasswordBox x:Name="AuthPass" FontSize="14" Padding="8,6" Background="#2A2A2A" Foreground="#E8E8E8"
+                 BorderBrush="#444444" BorderThickness="1" CaretBrush="#7CC7FF"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+      <Button x:Name="AuthOK" Content="确认" Width="100" Height="32" Margin="0,0,10,0"
+              Background="#4A9EFF" Foreground="White" BorderThickness="0" FontSize="13"/>
+      <Button x:Name="AuthCancel" Content="取消" Width="100" Height="32"
+              Background="#3A3A3A" Foreground="#E8E8E8" BorderThickness="0" FontSize="13"/>
+    </StackPanel>
+  </StackPanel>
+</Border>
+"@
+        $authRoot = [System.Windows.Markup.XamlReader]::Parse($authXaml)
+        $authWin.Content = $authRoot
+        $authUser = $authRoot.FindName("AuthUser")
+        $authPass = $authRoot.FindName("AuthPass")
+        $authOK = $authRoot.FindName("AuthOK")
+        $authCancel = $authRoot.FindName("AuthCancel")
+        $authResult = $false
+        $authOK.Add_Click({
+            if ($authUser.Text -eq "xiaoX" -and $authPass.Password -eq "1145145") {
+                $script:wdAuthed = $true
+                $authWin.DialogResult = $true
+                $authWin.Close()
+            } else {
+                [System.Windows.MessageBox]::Show("用户名或密码错误", "验证失败", "OK", "Warning") | Out-Null
+            }
+        })
+        $authCancel.Add_Click({ $authWin.DialogResult = $false; $authWin.Close() })
+        $authWin.ShowDialog() | Out-Null
+        if (-not $script:wdAuthed) { return }
+    }
     try {
     $warn = @"
 [WinDivert 内核级逐包优化 - 警告声明]
@@ -4033,12 +4705,9 @@ $window.FindName("BtnWdStart").Add_Click({
 "@
     $confirm = [System.Windows.MessageBox]::Show($warn, "WinDivert 警告声明", "OKCancel", "Warning", "Cancel")
     if ($confirm -ne "OK") { return }
-
     $btnStart.IsEnabled = $false
     $btnStart.Content = "启动中..."
     $resultBox.Text = "正在准备 WinDivert 环境...`n"
-
-    # 1. 下载 WinDivert 文件
     $resultBox.AppendText("1. 检查/下载 WinDivert 驱动...`n")
     [System.Windows.Forms.Application]::DoEvents()
     if (-not (Ensure-WinDivertFiles)) {
@@ -4047,8 +4716,6 @@ $window.FindName("BtnWdStart").Add_Click({
         return
     }
     $resultBox.AppendText("  [OK] WinDivert.dll + WinDivert64.sys 就绪`n")
-
-    # 2. 编译 C# 标记器
     $resultBox.AppendText("2. 编译逐包标记器...`n")
     [System.Windows.Forms.Application]::DoEvents()
     $exePath = Compile-WinDivertMarker
@@ -4058,36 +4725,36 @@ $window.FindName("BtnWdStart").Add_Click({
         return
     }
     $resultBox.AppendText("  [OK] WinDivertMarker.exe 编译完成`n")
-
-    # 3. 启动进程（输出重定向到文件，不使用管道和定时器）
-    $tcpPort = if ($tcpPortBox) { $tcpPortBox.Text } else { "25565" }
-    $udpPort = if ($udpPortBox) { $udpPortBox.Text } else { "19132" }
+    $tcpPort = if ($tcpPortBox -and $tcpPortBox.Text.Trim()) { $tcpPortBox.Text.Trim() } else { "0" }
+    $udpPort = if ($udpPortBox -and $udpPortBox.Text.Trim()) { $udpPortBox.Text.Trim() } else { "0" }
     $dscp = if ($dscpBox) { $dscpBox.Text } else { "46" }
-    $resultBox.AppendText("3. 启动逐包拦截 (TCP=$tcpPort UDP=$udpPort DSCP=$dscp)...`n")
+    $modeIdx = if ($modeBox) { [int]$modeBox.Text } else { 1 }
+    $modeNames = @('普通模式', '最佳模式', '急速模式', '狂暴模式', 'Backtrack', 'FPS精确')
+    $modeName = if ($modeIdx -ge 0 -and $modeIdx -lt 6) { $modeNames[$modeIdx] } else { '最佳模式' }
+    if ($modeIdx -lt 0) { $modeIdx = 1 }
+    if ($modeIdx -gt 5) { $modeIdx = 5 }
+    $tcpDisplay = if ($tcpPort -eq "0") { "无" } else { $tcpPort }
+    $udpDisplay = if ($udpPort -eq "0") { "无" } else { $udpPort }
+    $resultBox.AppendText("3. 启动逐包优化 [$modeName] (TCP=$tcpDisplay UDP=$udpDisplay DSCP=$dscp)...`n")
     [System.Windows.Forms.Application]::DoEvents()
-
     $logPath = Join-Path $script:wdDir 'wd_output.log'
     $errPath = Join-Path $script:wdDir 'wd_error.log'
-
-    # 清除旧日志
     Remove-Item $logPath -Force -ErrorAction SilentlyContinue
     Remove-Item $errPath -Force -ErrorAction SilentlyContinue
-
-    # 用 Start-Process 启动，输出到文件（不用管道，不用定时器）
+    $accelChk = $window.FindName("ChkAccelCompat")
+    $accelFlag = if ($accelChk -and $accelChk.IsChecked) { " --accel" } else { "" }
     $script:wdProcess = Start-Process -FilePath $exePath `
-        -ArgumentList "--tcp $tcpPort --udp $udpPort --dscp $dscp" `
+        -ArgumentList "--mode $modeIdx --tcp $tcpPort --udp $udpPort --dscp $dscp$accelFlag" `
         -WorkingDirectory $script:wdDir `
         -RedirectStandardOutput $logPath `
         -RedirectStandardError $errPath `
         -NoNewWindow -PassThru -ErrorAction Stop
-
     $resultBox.AppendText("  [OK] 进程已启动 (PID=$($script:wdProcess.Id))`n")
     $resultBox.AppendText("========================================`n")
     $resultBox.AppendText("WinDivert 正在后台运行...`n")
     $resultBox.AppendText("点击刷新状态查看实时包计数`n")
     $btnStop.IsEnabled = $true
     Add-LogEntry "INFO" "WinDivert 逐包优化已启动 PID=$($script:wdProcess.Id)"
-
     } catch {
         $errMsg = $_.Exception.Message
         try { $resultBox.AppendText("[失败] $errMsg`n") } catch {}
@@ -4096,30 +4763,25 @@ $window.FindName("BtnWdStart").Add_Click({
         $btnStart.IsEnabled = $true
     }
 })
-
-# --- Stop ---
 $window.FindName("BtnWdStop").Add_Click({
     $btnStart = $window.FindName("BtnWdStart")
     $btnStop = $window.FindName("BtnWdStop")
     $resultBox = $window.FindName("WdResultText")
-
     if ($script:wdProcess -and -not $script:wdProcess.HasExited) {
         try { $script:wdProcess.Kill() } catch {}
         Start-Sleep -Milliseconds 300
         $resultBox.AppendText("WinDivert 已停止`n")
         Add-LogEntry "INFO" "WinDivert 逐包优化已停止"
     }
+    Stop-Process -Name "WinDivertMarker" -Force -ErrorAction SilentlyContinue
     $script:wdProcess = $null
     $btnStart.Content = "启动逐包优化"
     $btnStart.IsEnabled = $true
     $btnStop.IsEnabled = $false
 })
-
-# --- Refresh ---
 $window.FindName("BtnWdRefresh").Add_Click({
     $resultBox = $window.FindName("WdResultText")
     $logPath = Join-Path $script:wdDir 'wd_output.log'
-
     if ($script:wdProcess -and -not $script:wdProcess.HasExited) {
         $resultBox.Text = "WinDivert 运行中 (PID=$($script:wdProcess.Id))`n"
         $resultBox.AppendText("========================================`n")
@@ -4142,33 +4804,23 @@ $window.FindName("BtnWdRefresh").Add_Click({
         $resultBox.Text = "WinDivert 未运行`n"
     }
 })
-
-# --- Uninstall ---
 $window.FindName("BtnWdUninstall").Add_Click({
     $resultBox = $window.FindName("WdResultText")
-
     $confirm = [System.Windows.MessageBox]::Show(
         "确认卸载 WinDivert 驱动？`n`n卸载后建议重启计算机以完全清除。`nWinDivert 文件将被删除。",
         "卸载确认", "OKCancel", "Question", "Cancel")
     if ($confirm -ne "OK") { return }
-
     $resultBox.Text = "正在卸载 WinDivert...`n"
     [System.Windows.Forms.Application]::DoEvents()
-
-    # 停止进程
     if ($script:wdProcess -and -not $script:wdProcess.HasExited) {
         try { $script:wdProcess.Kill() } catch {}
         $script:wdProcess = $null
     }
-
-    # 卸载驱动服务
     $cmds = @('sc stop WinDivert', 'sc stop WinDivert14', 'sc delete WinDivert', 'sc delete WinDivert14')
     foreach ($cmd in $cmds) {
         $r = Invoke-Command $cmd
         $resultBox.AppendText("$cmd -> exit=$($r.ExitCode)`n")
     }
-
-    # 删除文件
     if (Test-Path $script:wdDir) {
         try {
             Remove-Item $script:wdDir -Recurse -Force -ErrorAction Stop
@@ -4177,18 +4829,213 @@ $window.FindName("BtnWdUninstall").Add_Click({
             $resultBox.AppendText("[WARN] 部分文件无法删除`n")
         }
     }
-
     $resultBox.AppendText("========================================`n")
     $resultBox.AppendText("卸载完成，建议重启计算机。`n")
     Add-LogEntry "INFO" "WinDivert 驱动已卸载"
     [System.Windows.MessageBox]::Show("WinDivert 驱动已卸载。`n建议重启计算机以完全清除。", "完成", "OK", "Information") | Out-Null
+})
+$accelPatterns = @(
+    @("UU加速器", @("UU.exe", "UUService.exe", "UUTray.exe")),
+    @("迅游加速器", @("Xunyou.exe", "XunyouService.exe", "xunyou_tray.exe")),
+    @("雷神加速器", @("leigod.exe", "leigod_service.exe", "leigod_tray.exe")),
+    @("3733加速器", @("3733.exe", "3733Service.exe")),
+    @("奇游加速器", @("qiyu.exe", "qiyu_service.exe")),
+    @("网易UU", @("UU.exe", "UUService.exe")),
+    @("腾讯加速器", @("TGP_Accelerator.exe", "TenSafeDLL.exe"))
+)
+$window.FindName("BtnAccelDetect").Add_Click({
+    $statusEl = $window.FindName("AccelStatus")
+    $accelSel = $window.FindName("AccelSelector")
+    $detected = $null
+    foreach ($pattern in $accelPatterns) {
+        $accelName = $pattern[0]
+        $procNames = $pattern[1]
+        foreach ($pn in $procNames) {
+            $proc = Get-Process -Name $pn -ErrorAction SilentlyContinue
+            if ($proc) {
+                $detected = $accelName
+                break
+            }
+        }
+        if ($detected) { break }
+    }
+    if ($detected) {
+        $statusEl.Text = "已检测到: $detected"
+        $statusEl.Foreground = Create-Brush "#00E676"
+        $items = $accelSel.Items
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            if ($items[$i].Content -like "*$detected*") {
+                $accelSel.SelectedIndex = $i
+                break
+            }
+        }
+        Add-LogEntry "INFO" "检测到加速器: $detected"
+    } else {
+        $statusEl.Text = "未检测到加速器"
+        $statusEl.Foreground = Create-Brush "#E8E8E8"
+        Add-LogEntry "INFO" "未检测到加速器进程"
+    }
+    [System.Windows.MessageBox]::Show($statusEl.Text, "加速器检测", "OK", "Information") | Out-Null
+})
+$window.FindName("BtnAccelApply").Add_Click({
+    $gameSel = $window.FindName("GameSelector")
+    $tcpPortBox = $window.FindName("WdTcpPort")
+    $udpPortBox = $window.FindName("WdUdpPort")
+    $idx = $gameSel.SelectedIndex
+    switch ($idx) {
+        0 { $tcpPortBox.Text = "25565"; $udpPortBox.Text = "19132" }
+        1 { $tcpPortBox.Text = "25565"; $udpPortBox.Text = "19132" }
+        2 { $tcpPortBox.Text = "27015"; $udpPortBox.Text = "27015,27020,27030,27036" }
+        3 { $tcpPortBox.Text = "7448"; $udpPortBox.Text = "7448" }
+        4 { $tcpPortBox.Text = ""; $udpPortBox.Text = "37015,37017,37019,37021,37031" }
+        5 { $tcpPortBox.Text = ""; $udpPortBox.Text = "3074,27015,27017,27018,27019,27020" }
+        6 { $tcpPortBox.Text = ""; $udpPortBox.Text = "27015,27036" }
+        7 { $tcpPortBox.Text = ""; $udpPortBox.Text = "3074,6015" }
+        8 { $tcpPortBox.Text = ""; $udpPortBox.Text = "53640,53641,53642,53643,53644,53645" }
+        9 { $tcpPortBox.Text = ""; $udpPortBox.Text = ""; $msg = "OOPZ 语音优化已启用`n通过 QoS 进程优先级优化 oopz.exe (DSCP 46)`nWinDivert 端口留空（OOPZ 使用动态 UDP 端口）`n请同时选择游戏加速器兼容模式"
+            [System.Windows.MessageBox]::Show($msg, "OOPZ 语音优化", "OK", "Information") | Out-Null
+            return
+        }
+        10 { }
+    }
+    $accelChk = $window.FindName("ChkAccelCompat")
+    $msg = if ($accelChk.IsChecked) {
+        "已启用加速器兼容模式`nWinDivert 过滤器将匹配全部网卡的流量`n端口: TCP=$($tcpPortBox.Text) UDP=$($udpPortBox.Text)"
+    } else {
+        "端口预设已应用`nTCP=$($tcpPortBox.Text) UDP=$($udpPortBox.Text)"
+    }
+    [System.Windows.MessageBox]::Show($msg, "端口预设", "OK", "Information") | Out-Null
+})
+$window.FindName("BtnHypoMuxDownload").Add_Click({
+    Start-Process "https://github.com/Hypostasis-Cat/HypoMux/releases/latest"
+})
+$script:hypoMuxProcess = $null
+$script:hypoMuxLogTimer = $null
+function Add-HypoMuxLog {
+    param([string]$msg)
+    $box = $window.FindName("HypoMuxLogBox")
+    if ($box) {
+        $ts = Get-Date -Format "HH:mm:ss"
+        $box.AppendText("[$ts] $msg`n")
+        $box.ScrollToEnd()
+    }
+}
+$window.FindName("BtnHypoMuxStart").Add_Click({
+    $btnStart = $window.FindName("BtnHypoMuxStart")
+    $btnStop = $window.FindName("BtnHypoMuxStop")
+    $statusEl = $window.FindName("HypoMuxProxyStatus")
+    $btnStart.Content = "编译中..."
+    $btnStart.IsEnabled = $false
+    $exePath = Compile-HypoMuxLite
+    if (-not $exePath -or -not (Test-Path $exePath)) {
+        Add-HypoMuxLog "[ERROR] HypoMuxLite 编译失败"
+        $btnStart.Content = "启动聚合代理"
+        $btnStart.IsEnabled = $true
+        return
+    }
+    Add-HypoMuxLog "[INFO] HypoMuxLite 编译成功: $exePath"
+    $script:hypoMuxExePath = $exePath
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $exePath
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $script:hypoMuxProcess = New-Object System.Diagnostics.Process
+    $script:hypoMuxProcess.StartInfo = $psi
+    $script:hypoMuxProcess.EnableRaisingEvents = $true
+    $stdoutBuilder = New-Object System.Text.StringBuilder
+    $null = Register-ObjectEvent -InputObject $script:hypoMuxProcess -EventName "OutputDataReceived" -SourceIdentifier "HM_Output" -Action {
+        if ($EventArgs.Data) {
+            $line = $EventArgs.Data
+            $window.FindName("HypoMuxLogBox").Dispatcher.BeginInvoke([Action]{
+                $box = $window.FindName("HypoMuxLogBox")
+                if ($box) {
+                    $box.AppendText("$line`n")
+                    $box.ScrollToEnd()
+                }
+            }) | Out-Null
+        }
+    }
+    $null = Register-ObjectEvent -InputObject $script:hypoMuxProcess -EventName "Exited" -SourceIdentifier "HM_Exited" -Action {
+        $window.FindName("BtnHypoMuxStart").Dispatcher.BeginInvoke([Action]{
+            $window.FindName("BtnHypoMuxStart").Content = "启动聚合代理"
+            $window.FindName("BtnHypoMuxStart").IsEnabled = $true
+            $window.FindName("BtnHypoMuxStop").IsEnabled = $false
+            $window.FindName("HypoMuxProxyStatus").Text = "代理已停止"
+            Add-HypoMuxLog "[INFO] HypoMuxLite 进程已退出"
+        }) | Out-Null
+        Unregister-Event -SourceIdentifier "HM_Output" -ErrorAction SilentlyContinue
+        Unregister-Event -SourceIdentifier "HM_Exited" -ErrorAction SilentlyContinue
+    }
+    try {
+        $script:hypoMuxProcess.Start() | Out-Null
+        $script:hypoMuxProcess.BeginOutputReadLine()
+        $btnStart.Content = "运行中"
+        $btnStop.IsEnabled = $true
+        $statusEl.Text = "代理运行中 - HTTP代理 127.0.0.1:10801 | 系统代理已设置"
+        Add-HypoMuxLog "[INFO] HypoMuxLite 代理已启动 (PID=$($script:hypoMuxProcess.Id))"
+    } catch {
+        Add-HypoMuxLog "[ERROR] 启动失败: $($_.Exception.Message)"
+        $btnStart.Content = "启动聚合代理"
+        $btnStart.IsEnabled = $true
+    }
+})
+$window.FindName("BtnHypoMuxStop").Add_Click({
+    if ($script:hypoMuxProcess -and -not $script:hypoMuxProcess.HasExited) {
+        try {
+            $stdin = $script:hypoMuxProcess.StandardInput
+            $stdin.WriteLine("")
+            $stdin.Close()
+        } catch {}
+        Start-Sleep -Milliseconds 500
+        if (-not $script:hypoMuxProcess.HasExited) {
+            Stop-Process -Id $script:hypoMuxProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $window.FindName("BtnHypoMuxStart").Content = "启动聚合代理"
+    $window.FindName("BtnHypoMuxStart").IsEnabled = $true
+    $window.FindName("BtnHypoMuxStop").IsEnabled = $false
+    $window.FindName("HypoMuxProxyStatus").Text = "代理已停止"
+    Add-HypoMuxLog "[INFO] 代理已停止，系统代理已恢复"
+})
+$window.FindName("BtnHypoMuxDetectNic").Add_Click({
+    $btn = $window.FindName("BtnHypoMuxDetectNic")
+    $oldText = $btn.Content
+    $btn.Content = "检测中..."
+    $btn.IsEnabled = $false
+    $statusEl = $window.FindName("HypoMuxNicStatus")
+    try {
+        $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
+        if (-not $adapters -or $adapters.Count -eq 0) {
+            $statusEl.Text = "未检测到活动网卡。HypoMux 需要至少 2 个活动网络连接才能实现带宽聚合。"
+        } elseif ($adapters.Count -eq 1) {
+            $nic = $adapters[0]
+            $ip = (Get-NetIPAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress
+            $statusEl.Text = "检测到 1 个活动网卡：$($nic.Name) ($ip)`n`n仅 1 个网卡无法实现带宽叠加。代理仍可运行(全部流量走单网卡)。"
+        } else {
+            $lines = @()
+            $lines += "检测到 $($adapters.Count) 个活动网卡 - 适合多网卡聚合："
+            $lines += ""
+            foreach ($nic in $adapters) {
+                $ip = (Get-NetIPAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress
+                $lines += "  - $($nic.Name) | $ip | $($nic.LinkSpeed)"
+            }
+            $lines += ""
+            $lines += "多网卡环境已就绪，可启动聚合代理进行带宽叠加加速。"
+            $statusEl.Text = $lines -join "`n"
+        }
+    } catch {
+        $statusEl.Text = "检测失败: $($_.Exception.Message)"
+    }
+    $btn.Content = $oldText
+    $btn.IsEnabled = $true
 })
 $window.FindName("BtnTestDriverCheck").Add_Click({
     $btn = $window.FindName("BtnTestDriverCheck")
     $oldText = $btn.Content
     $btn.Content = "检测中..."
     $btn.IsEnabled = $false
-
     $results = New-Object System.Collections.ArrayList
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
@@ -4199,11 +5046,9 @@ $window.FindName("BtnTestDriverCheck").Add_Click({
                 $results.Add("[INFO] 网卡：$($adapter.Name)") | Out-Null
                 $results.Add("       描述：$($adapter.InterfaceDescription)") | Out-Null
                 $results.Add("       速度：$($adapter.LinkSpeed)") | Out-Null
-
                 $driver = Get-CimInstance Win32_PnPSignedDriver -ErrorAction SilentlyContinue |
                     Where-Object { $_.DeviceName -eq $adapter.InterfaceDescription -or $_.FriendlyName -eq $adapter.InterfaceDescription } |
                     Select-Object -First 1
-
                 if ($driver) {
                     $driverDate = if ($driver.DriverDate) { ([Management.ManagementDateTimeConverter]::ToDateTime($driver.DriverDate)).ToString("yyyy-MM-dd") } else { "未知" }
                     $results.Add("       驱动厂商：$($driver.DriverProviderName)") | Out-Null
@@ -4219,7 +5064,6 @@ $window.FindName("BtnTestDriverCheck").Add_Click({
     } catch {
         $results.Add("[ERROR] 驱动检测失败：$($_.Exception.Message)") | Out-Null
     }
-
     $list = $window.FindName("ResultsList")
     if ($list) {
         $list.Items.Clear()
@@ -4229,13 +5073,11 @@ $window.FindName("BtnTestDriverCheck").Add_Click({
     $btn.IsEnabled = $true
     Add-LogEntry "INFO" "网卡驱动检测已完成"
 })
-
 $window.FindName("BtnOptimizeDriverParams").Add_Click({
     $btn = $window.FindName("BtnOptimizeDriverParams")
     $oldText = $btn.Content
     $btn.Content = "优化中..."
     $btn.IsEnabled = $false
-
     $results = New-Object System.Collections.ArrayList
     $doRss = [bool]$window.FindName("ChkDriverRss").IsChecked
     $doPower = [bool]$window.FindName("ChkDriverPower").IsChecked
@@ -4246,7 +5088,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
     $doInterrupt = [bool]$window.FindName("ChkDriverInterrupt").IsChecked
     $doFlow = [bool]$window.FindName("ChkDriverFlow").IsChecked
     $doRegistryEco = [bool]$window.FindName("ChkDriverRegistryEco").IsChecked
-
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
         if (-not $adapters -or $adapters.Count -eq 0) {
@@ -4262,10 +5103,8 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
             } else {
                 $results.Add("[SKIP] 未勾选：全局 RSS / TaskOffload") | Out-Null
             }
-
             foreach ($adapter in $adapters) {
                 $results.Add("[INFO] 正在优化网卡驱动参数：$($adapter.Name)") | Out-Null
-
                 if ($doRss) {
                     try {
                         Enable-NetAdapterRss -Name $adapter.Name -ErrorAction Stop
@@ -4274,7 +5113,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
                         $results.Add("[WARN] $($adapter.Name)：RSS 不支持或启用失败") | Out-Null
                     }
                 }
-
                 if ($doPower) {
                     try {
                         Set-NetAdapterPowerManagement -Name $adapter.Name -AllowComputerToTurnOffDevice Disabled -ErrorAction Stop
@@ -4283,7 +5121,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
                         $results.Add("[INFO] $($adapter.Name)：电源管理项不支持或无需修改") | Out-Null
                     }
                 }
-
                 $displaySettings = @()
                 if ($doEnergy) { $displaySettings += ,@("Energy Efficient Ethernet", "Disabled", "关闭节能以太网") }
                 if ($doGreen) { $displaySettings += ,@("Green Ethernet", "Disabled", "关闭绿色以太网") }
@@ -4291,7 +5128,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
                 if ($doUltraLow) { $displaySettings += ,@("Ultra Low Power Mode", "Disabled", "关闭超低功耗模式") }
                 if ($doInterrupt) { $displaySettings += ,@("Interrupt Moderation", "Disabled", "关闭中断调节以降低延迟") }
                 if ($doFlow) { $displaySettings += ,@("Flow Control", "Disabled", "关闭流控以减少排队延迟") }
-
                 foreach ($setting in $displaySettings) {
                     $displayName = $setting[0]
                     $targetValue = $setting[1]
@@ -4308,14 +5144,12 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
                         $results.Add("[WARN] $($adapter.Name)：$displayName 修改失败") | Out-Null
                     }
                 }
-
                 if ($doRegistryEco) {
                     $registrySettings = @(
                         @("AutoDisableGigabit", "0", "禁止自动降千兆"),
                         @("EnableGreenEthernet", "0", "关闭绿色以太网注册项"),
                         @("EEE", "0", "关闭 EEE 注册项")
                     )
-
                     foreach ($setting in $registrySettings) {
                         $registryKeyword = $setting[0]
                         $targetValue = $setting[1]
@@ -4331,7 +5165,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
                         }
                     }
                 }
-
                 $results.Add("[INFO] $($adapter.Name)：驱动参数优化完成，部分项目可能需要禁用/启用网卡或重启后生效") | Out-Null
                 $results.Add("") | Out-Null
             }
@@ -4339,7 +5172,6 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
     } catch {
         $results.Add("[ERROR] 网卡驱动参数优化失败：$($_.Exception.Message)") | Out-Null
     }
-
     $list = $window.FindName("ResultsList")
     if ($list) {
         $list.Items.Clear()
@@ -4350,11 +5182,7 @@ $window.FindName("BtnOptimizeDriverParams").Add_Click({
     Add-LogEntry "INFO" "网卡驱动参数优化已完成"
     [System.Windows.MessageBox]::Show("网卡驱动参数优化已完成。部分参数可能需要禁用/启用网卡或重启后生效。", "完成", "OK", "Information") | Out-Null
 })
-
-# ====== MTU 最佳值智能优化 ======
 $script:detectedMtu = 0
-
-# 探测最佳 MTU（二分法）
 $window.FindName("BtnMtuDetect").Add_Click({
     $btn = $window.FindName("BtnMtuDetect")
     $oldText = $btn.Content
@@ -4362,11 +5190,8 @@ $window.FindName("BtnMtuDetect").Add_Click({
     $btn.IsEnabled = $false
     $resultText = $window.FindName("MtuResultText")
     $resultText.Text = "正在探测最佳 MTU 值..."
-
     $targets = @("223.5.5.5", "223.6.6.6")
     $activeTarget = $null
-
-    # 先检测哪个 DNS 可达
     foreach ($t in $targets) {
         $p = New-Object System.Diagnostics.Process
         $p.StartInfo.FileName = "cmd.exe"
@@ -4379,7 +5204,6 @@ $window.FindName("BtnMtuDetect").Add_Click({
         $p.WaitForExit(8000) | Out-Null
         if ($p.ExitCode -eq 0) { $activeTarget = $t; break }
     }
-
     if (-not $activeTarget) {
         $resultText.Text = "[FAIL] 无法连接测试服务器（223.5.5.5 / 223.6.6.6），请检查网络连接后重试。"
         $btn.Content = $oldText
@@ -4387,14 +5211,10 @@ $window.FindName("BtnMtuDetect").Add_Click({
         Add-LogEntry "WARN" "MTU 探测失败：无法连接测试服务器"
         return
     }
-
     $resultText.Text = "已连接 $activeTarget，正在二分法搜索最大不分片包大小..."
-
-    # 二分法搜索 1400-1472
     $low = 1400
     $high = 1472
     $bestSize = 1400
-
     while ($low -le $high) {
         $mid = [math]::Floor(($low + $high) / 2)
         $p = New-Object System.Diagnostics.Process
@@ -4406,7 +5226,6 @@ $window.FindName("BtnMtuDetect").Add_Click({
         $p.Start() | Out-Null
         $p.StandardOutput.ReadToEnd() | Out-Null
         $p.WaitForExit(10000) | Out-Null
-
         if ($p.ExitCode -eq 0) {
             $bestSize = $mid
             $low = $mid + 1
@@ -4415,40 +5234,31 @@ $window.FindName("BtnMtuDetect").Add_Click({
         }
         $resultText.Text = "搜索中... 当前测试包大小: $mid 字节，已确认最大: $bestSize 字节"
     }
-
     $optimalMtu = $bestSize + 28
     $script:detectedMtu = $optimalMtu
-
     $resultText.Text = "探测完成！`n目标服务器: $activeTarget`n最大不分片包大小: $bestSize 字节`n最佳 MTU 值: $optimalMtu`n`n请在上方选择网卡后点击「应用 MTU」生效。"
     $btn.Content = $oldText
     $btn.IsEnabled = $true
     Add-LogEntry "INFO" "MTU 探测完成：最佳值 $optimalMtu（包大小 $bestSize，目标 $activeTarget）"
 })
-
-# 应用 MTU
 $window.FindName("BtnMtuApply").Add_Click({
     $btn = $window.FindName("BtnMtuApply")
     $resultText = $window.FindName("MtuResultText")
-
     if ($script:detectedMtu -le 0) {
         $resultText.Text = "[WARN] 请先点击「探测最佳 MTU」获取最佳值。"
         return
     }
-
     $combo = $window.FindName("MtuAdapterCombo")
     $adapter = $combo.SelectedItem
     if (-not $adapter) {
         $resultText.Text = "[WARN] 请先选择要应用 MTU 的网卡。"
         return
     }
-
     $mtu = $script:detectedMtu
     $btn.Content = "应用中..."
     $btn.IsEnabled = $false
     $resultText.Text = "正在将 MTU=$mtu 应用到网卡「$adapter」..."
-
     try {
-        # 设置 MTU
         $p1 = New-Object System.Diagnostics.Process
         $p1.StartInfo.FileName = "cmd.exe"
         $p1.StartInfo.Arguments = "/c netsh int ipv4 set subinterface `"$adapter`" mtu=$mtu store=persistent"
@@ -4460,7 +5270,6 @@ $window.FindName("BtnMtuApply").Add_Click({
         $p1.StandardOutput.ReadToEnd() | Out-Null
         $p1.StandardError.ReadToEnd() | Out-Null
         $p1.WaitForExit(10000) | Out-Null
-
         if ($p1.ExitCode -ne 0) {
             $resultText.Text = "[FAIL] MTU 设置失败（netsh 返回错误码 $($p1.ExitCode)）。`n请确认以管理员身份运行，且网卡名称正确。"
             $btn.Content = "应用 MTU"
@@ -4468,8 +5277,6 @@ $window.FindName("BtnMtuApply").Add_Click({
             Add-LogEntry "WARN" "MTU 应用失败：netsh 返回 $($p1.ExitCode)"
             return
         }
-
-        # 禁用/启用网卡使 MTU 生效
         Start-Sleep -Milliseconds 500
         $p2 = New-Object System.Diagnostics.Process
         $p2.StartInfo.FileName = "cmd.exe"
@@ -4479,7 +5286,6 @@ $window.FindName("BtnMtuApply").Add_Click({
         $p2.Start() | Out-Null
         $p2.WaitForExit(10000) | Out-Null
         Start-Sleep -Seconds 2
-
         $p3 = New-Object System.Diagnostics.Process
         $p3.StartInfo.FileName = "cmd.exe"
         $p3.StartInfo.Arguments = "/c netsh interface set interface `"$adapter`" admin=enabled"
@@ -4488,8 +5294,6 @@ $window.FindName("BtnMtuApply").Add_Click({
         $p3.Start() | Out-Null
         $p3.WaitForExit(10000) | Out-Null
         Start-Sleep -Seconds 2
-
-        # 验证结果
         $p4 = New-Object System.Diagnostics.Process
         $p4.StartInfo.FileName = "cmd.exe"
         $p4.StartInfo.Arguments = "/c netsh int ipv4 show subinterface `"$adapter`""
@@ -4499,38 +5303,28 @@ $window.FindName("BtnMtuApply").Add_Click({
         $p4.Start() | Out-Null
         $verifyOut = $p4.StandardOutput.ReadToEnd()
         $p4.WaitForExit(8000) | Out-Null
-
         $verifyLine = ($verifyOut -split "`n" | Where-Object { $_ -match $adapter } | Select-Object -First 1)
         $verifyLine = if ($verifyLine) { $verifyLine.Trim() } else { "（无法读取验证信息）" }
-
         $resultText.Text = "[OK] MTU 已成功应用到网卡「$adapter」`n`n设置值: MTU=$mtu`n网卡已自动重启使设置生效。`n`n当前配置:`n$verifyLine"
         Add-LogEntry "INFO" "MTU 已应用：网卡 $adapter，MTU=$mtu"
     } catch {
         $resultText.Text = "[FAIL] MTU 应用异常：$($_.Exception.Message)"
         Add-LogEntry "WARN" "MTU 应用异常：$($_.Exception.Message)"
     }
-
     $btn.Content = "应用 MTU"
     $btn.IsEnabled = $true
 })
-
-# 还原默认 MTU (1500) — 遍历所有已连接网卡（与脚本一致）
 $window.FindName("BtnMtuRestore").Add_Click({
     $btn = $window.FindName("BtnMtuRestore")
     $resultText = $window.FindName("MtuResultText")
-
     $btn.Content = "还原中..."
     $btn.IsEnabled = $false
     $resultText.Text = "正在将所有已连接网卡的 MTU 还原为 1500..."
-
     try {
-        # 获取所有已连接的网络接口（与脚本相同的方式）
         $adapters = @()
         try {
             $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' } | Select-Object -ExpandProperty Name
         } catch {}
-
-        # 回退到 netsh 方式（与脚本完全一致）
         if (-not $adapters -or $adapters.Count -eq 0) {
             $rawOutput = netsh interface ipv4 show interfaces 2>$null
             foreach ($line in $rawOutput) {
@@ -4542,17 +5336,14 @@ $window.FindName("BtnMtuRestore").Add_Click({
                 }
             }
         }
-
         if (-not $adapters -or $adapters.Count -eq 0) {
             $resultText.Text = "[WARN] 未检测到已连接的网卡。"
             $btn.Content = "还原默认 MTU (1500)"
             $btn.IsEnabled = $true
             return
         }
-
         $successList = @()
         $failList = @()
-
         foreach ($adapter in $adapters) {
             $p = New-Object System.Diagnostics.Process
             $p.StartInfo.FileName = "cmd.exe"
@@ -4565,14 +5356,12 @@ $window.FindName("BtnMtuRestore").Add_Click({
             $p.StandardOutput.ReadToEnd() | Out-Null
             $p.StandardError.ReadToEnd() | Out-Null
             $p.WaitForExit(10000) | Out-Null
-
             if ($p.ExitCode -eq 0) {
                 $successList += $adapter
             } else {
                 $failList += $adapter
             }
         }
-
         $msg = ""
         if ($successList.Count -gt 0) {
             $msg = "[OK] 已还原 $($successList.Count) 块网卡的 MTU 为 1500：$($successList -join ', ')"
@@ -4582,18 +5371,15 @@ $window.FindName("BtnMtuRestore").Add_Click({
             $msg += "`n[WARN] $($failList.Count) 块网卡还原失败：$($failList -join ', ')"
             Add-LogEntry "WARN" "MTU 还原失败：$($failList -join ', ')"
         }
-
         $resultText.Text = $msg
         $script:detectedMtu = 0
     } catch {
         $resultText.Text = "[FAIL] MTU 还原异常：$($_.Exception.Message)"
         Add-LogEntry "WARN" "MTU 还原异常：$($_.Exception.Message)"
     }
-
     $btn.Content = "还原默认 MTU (1500)"
     $btn.IsEnabled = $true
 })
-
 foreach ($item in $script:dnsItems) {
     $btnEl = $window.FindName($item.Button)
     if ($btnEl) {
@@ -4604,24 +5390,20 @@ foreach ($item in $script:dnsItems) {
         })
     }
 }
-
 $window.FindName("BtnDnsSpeedTest").Add_Click({
     $btn = $window.FindName("BtnDnsSpeedTest")
     $oldText = $btn.Content
     $btn.Content = "测速中..."
     $btn.IsEnabled = $false
-
     for ($i = 0; $i -lt $script:dnsItems.Count; $i++) {
         Update-DnsLatencyText $i "测速中"
     }
-
     $runspace = [RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.Open()
     $runspace.SessionStateProxy.SetVariable("window", $window)
     $runspace.SessionStateProxy.SetVariable("dnsItems", $script:dnsItems)
     $runspace.SessionStateProxy.SetVariable("oldText", $oldText)
-
     $ps = [PowerShell]::Create()
     $ps.Runspace = $runspace
     $ps.AddScript({
@@ -4643,7 +5425,6 @@ $window.FindName("BtnDnsSpeedTest").Add_Click({
             }
             return -1
         }
-
         for ($i = 0; $i -lt $dnsItems.Count; $i++) {
             $item = $dnsItems[$i]
             $latency = MeasureHiddenCmdPing $item.Primary 3
@@ -4656,7 +5437,6 @@ $window.FindName("BtnDnsSpeedTest").Add_Click({
                 if ($tb) { $tb.Text = "$base ----- $latencyText" }
             })
         }
-
         $window.Dispatcher.Invoke([Action]{
             $btn = $window.FindName("BtnDnsSpeedTest")
             if ($btn) {
@@ -4665,7 +5445,6 @@ $window.FindName("BtnDnsSpeedTest").Add_Click({
             }
         })
     }) | Out-Null
-
     $handle = $ps.BeginInvoke()
     Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
         if ($ps.InvocationStateInfo.State -eq "Completed") {
@@ -4674,16 +5453,13 @@ $window.FindName("BtnDnsSpeedTest").Add_Click({
             $runspace.Dispose()
         }
     } | Out-Null
-
     Add-LogEntry "INFO" "DNS 测速已开始"
 })
-
 $window.FindName("BtnFlushDns").Add_Click({
     $r = Invoke-Command "ipconfig /flushdns"
     Add-LogEntry "INFO" "DNS 缓存已清理"
     [System.Windows.MessageBox]::Show("DNS 缓存清理成功！", "成功", "OK", "Information") | Out-Null
 })
-
 $window.FindName("BtnApplyDns").Add_Click({
     $sel = $script:selectedDnsIndex
     $dnsPairs = @(
@@ -4720,15 +5496,12 @@ $window.FindName("BtnApplyDns").Add_Click({
         [System.Windows.MessageBox]::Show("请先选择一个 DNS 预设", "提示", "OK", "Warning") | Out-Null
     }
 })
-
 $window.FindName("BtnLoadHosts").Add_Click({
     Load-HostsToEditor
 })
-
 $window.FindName("BtnSaveHosts").Add_Click({
     Save-HostsFromEditor
 })
-
 $window.FindName("BtnOptimizeHosts").Add_Click({
     try {
         if (-not (Test-Path $script:hostsPath)) {
@@ -4756,7 +5529,6 @@ $window.FindName("BtnOptimizeHosts").Add_Click({
         [System.Windows.MessageBox]::Show("Hosts 优化失败：$($_.Exception.Message)", "错误", "OK", "Error") | Out-Null
     }
 })
-
 $window.FindName("BtnResetHosts").Add_Click({
     try {
         if (Test-Path $script:hostsBackupPath) {
@@ -4790,19 +5562,15 @@ $window.FindName("BtnResetHosts").Add_Click({
         [System.Windows.MessageBox]::Show("Hosts 重置失败：$($_.Exception.Message)", "错误", "OK", "Error") | Out-Null
     }
 })
-
 $window.FindName("BtnSelectRecommendedCustom").Add_Click({
     Set-CustomChecks $true
 })
-
 $window.FindName("BtnClearCustom").Add_Click({
     Set-CustomChecks $false
 })
-
 $window.FindName("BtnApplyCustom").Add_Click({
     Apply-CustomOptimizations
 })
-
 $window.FindName("BtnRestoreDns").Add_Click({
     $adapters = Get-ActiveAdapters
     if ($adapters.Count -eq 0) {
@@ -4823,229 +5591,81 @@ $window.FindName("BtnRestoreDns").Add_Click({
         [System.Windows.MessageBox]::Show("DNS 已恢复为 DHCP`n覆盖全部 $okCount 个活动网卡", "成功", "OK", "Information") | Out-Null
     }
 })
-
-# QoS buttons
 $window.FindName("BtnApplyQoS").Add_Click({
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Java_Game`"" | Out-Null
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Bedrock_Game`"" | Out-Null
-    $r1 = Invoke-Command "netsh qos add policy name=`"NetOpt_MC_Java_Game`" appPath=`"javaw.exe`" dscp=46 throttleRate=none"
-    $r2 = Invoke-Command "netsh qos add policy name=`"NetOpt_MC_Bedrock_Game`" appPath=`"Minecraft.Windows.exe`" dscp=46 throttleRate=none"
+    $qosPolicies = @(
+        @{ Name="NetOpt_MC_Java_Game"; App="javaw.exe" },
+        @{ Name="NetOpt_MC_Bedrock_Game"; App="Minecraft.Windows.exe" },
+        @{ Name="NetOpt_FPS_CS2_Proc"; App="cs2.exe" },
+        @{ Name="NetOpt_FPS_Val_Proc"; App="VALORANT-Win64-Shipping.exe" },
+        @{ Name="NetOpt_FPS_Apex_Proc"; App="r5apex.exe" },
+        @{ Name="NetOpt_FPS_CoD_Proc"; App="cod.exe" },
+        @{ Name="NetOpt_FPS_PUBG_Proc"; App="TslGame.exe" },
+        @{ Name="NetOpt_FPS_R6_Proc"; App="RainbowSix.exe" },
+        @{ Name="NetOpt_FPS_Roblox_Proc"; App="RobloxPlayerBeta.exe" },
+        @{ Name="NetOpt_OOPZ_Proc"; App="oopz.exe" }
+    )
     $okCount = 0
     $failMsgs = @()
-    if ($r1.ExitCode -eq 0) { $okCount++ } else { $failMsgs += "Java QoS 策略添加失败（退出码 $($r1.ExitCode)）" }
-    if ($r2.ExitCode -eq 0) { $okCount++ } else { $failMsgs += "基岩版 QoS 策略添加失败（退出码 $($r2.ExitCode)）" }
+    foreach ($q in $qosPolicies) {
+        try { Remove-NetQosPolicy -Name $q.Name -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+        try {
+            if ($q.App) {
+                New-NetQosPolicy -Name $q.Name -AppPathName $q.App -DSCPAction 46 -ErrorAction Stop | Out-Null
+            } elseif ($q.Port) {
+                New-NetQosPolicy -Name $q.Name -Protocol $q.Proto -LocalPort $q.Port -DSCPAction 46 -ErrorAction Stop | Out-Null
+            }
+            $okCount++
+        } catch {
+            $failMsgs += "$($q.Name) 失败: $($_.Exception.Message)"
+        }
+    }
     if ($failMsgs.Count -gt 0) {
-        $msg = "QoS 策略应用结果：成功 $okCount/2`n`n失败项：`n" + ($failMsgs -join "`n")
+        $msg = "QoS 策略应用结果：成功 $okCount/$($qosPolicies.Count)`n`n失败项：`n" + ($failMsgs -join "`n")
         Add-LogEntry "WARN" "QoS 部分失败：$($failMsgs -join '; ')"
         [System.Windows.MessageBox]::Show($msg, "部分失败", "OK", "Warning") | Out-Null
     } else {
-        Add-LogEntry "INFO" "QoS 策略已应用 (DSCP 46)，2/2 成功"
-        [System.Windows.MessageBox]::Show("Minecraft QoS 策略已应用 (DSCP 46)，2/2 成功", "成功", "OK", "Information") | Out-Null
+        Add-LogEntry "INFO" "QoS 策略已应用 (DSCP 46)，含 FPS 游戏优化"
+        [System.Windows.MessageBox]::Show("QoS 策略已应用 (DSCP 46)`n含 Minecraft + FPS 游戏优化`n成功 $okCount/$($qosPolicies.Count)", "成功", "OK", "Information") | Out-Null
     }
     BtnRefreshQoS_Click $null $null
 })
-
 $window.FindName("BtnRemoveQoS").Add_Click({
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Java_Game`"" | Out-Null
-    Invoke-Command "netsh qos delete policy name=`"NetOpt_MC_Bedrock_Game`"" | Out-Null
-    Add-LogEntry "INFO" "QoS 策略已移除"
+    $qosNames = @("NetOpt_MC_Java_Game","NetOpt_MC_Bedrock_Game",
+      "NetOpt_FPS_CS2_Proc","NetOpt_FPS_CS2_Port","NetOpt_FPS_Val_Proc","NetOpt_FPS_Val_Port",
+      "NetOpt_FPS_Apex_Proc","NetOpt_FPS_Apex_Port","NetOpt_FPS_CoD_Proc","NetOpt_FPS_CoD_Port",
+      "NetOpt_FPS_PUBG_Proc","NetOpt_FPS_R6_Proc","NetOpt_FPS_R6_Port",
+      "NetOpt_FPS_Roblox_Proc","NetOpt_FPS_Roblox_Port","NetOpt_OOPZ_Proc")
+    foreach ($n in $qosNames) {
+        try { Remove-NetQosPolicy -Name $n -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+    }
+    Add-LogEntry "INFO" "QoS 策略已移除（含 FPS 游戏）"
     BtnRefreshQoS_Click $null $null
 })
-
 function BtnRefreshQoS_Click {
     param($sender, $e)
     $qosText = $window.FindName("QoSPolicyText")
     if (-not $qosText) { return }
-    $r = Invoke-Command "netsh qos show policy"
-    $qosText.Text = $r.Output
-}
-
-$window.FindName("BtnRefreshQoS").Add_Click({ BtnRefreshQoS_Click $args[0] $args[1] })
-
-# Monitor toggle
-$monitorRunspace = $null
-$monitorPS = $null
-
-$window.FindName("MonitorToggle").Add_Click({
-    $toggle = $window.FindName("MonitorToggle")
-    if ($toggle.IsChecked) {
-        $toggle.Content = "停止监控"
-        $adapter = Get-ActiveAdapters | Select-Object -First 1
-        if (-not $adapter) { return }
-
-        $monitorRunspace = [RunspaceFactory]::CreateRunspace()
-        $monitorRunspace.ApartmentState = "STA"
-        $monitorRunspace.Open()
-        $monitorRunspace.SessionStateProxy.SetVariable("window", $window)
-        $monitorRunspace.SessionStateProxy.SetVariable("ifaceName", $adapter.Name)
-        $monitorRunspace.SessionStateProxy.SetVariable("stopFlag", $false)
-
-        $monitorPS = [PowerShell]::Create()
-        $monitorPS.Runspace = $monitorRunspace
-        $monitorPS.AddScript({
-            $prev = $null
-            $prevTime = $null
-            while (-not $stopFlag) {
-                $curr = $null
-                try {
-                    $stats = Get-NetAdapter -Name $ifaceName -ErrorAction SilentlyContinue | Get-NetAdapterStatistics -ErrorAction SilentlyContinue
-                    if ($stats) { $curr = @{ Sent = $stats.OutboundUnicastBytes; Recv = $stats.InboundUnicastBytes } }
-                } catch {}
-                if ($curr -and $prev) {
-                    $now = Get-Date
-                    $dt = ($now - $prevTime).TotalSeconds
-                    if ($dt -gt 0) {
-                        $dl = [math]::Round(($curr.Recv - $prev.Recv) * 8 / 1000000 / $dt, 2)
-                        $ul = [math]::Round(($curr.Sent - $prev.Sent) * 8 / 1000000 / $dt, 2)
-                        if ($dl -lt 0) { $dl = 0 }
-                        if ($ul -lt 0) { $ul = 0 }
-                        $window.Dispatcher.Invoke([Action]{
-                            $window.FindName("RealtimeDownload").Text = $dl.ToString("F1")
-                            $window.FindName("RealtimeUpload").Text = $ul.ToString("F1")
-                            $window.FindName("DownloadBar").Value = [math]::Min($dl, 100)
-                            $window.FindName("UploadBar").Value = [math]::Min($ul, 100)
-                        })
-                    }
-                }
-                $prev = $curr
-                $prevTime = Get-Date
-                Start-Sleep -Milliseconds 1000
+    try {
+        $policies = Get-NetQosPolicy -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "NetOpt_*" }
+        if ($policies) {
+            $lines = @("QoS 策略列表:")
+            $lines += "================================"
+            foreach ($p in $policies) {
+                $lines += "名称: $($p.Name)"
+                $app = if ($p.AppPathName) { $p.AppPathName } else { "(端口策略)" }
+                $lines += "  应用: $app"
+                $lines += "  DSCP: $($p.DSCPAction)"
+                $lines += ""
             }
-        }) | Out-Null
-
-        $monitorHandle = $monitorPS.BeginInvoke()
-        Add-LogEntry "INFO" "带宽监控已启动：$($adapter.Name)"
-    } else {
-        $toggle.Content = "开始监控"
-        $stopFlag = $true
-        if ($monitorRunspace) {
-            $monitorRunspace.SessionStateProxy.SetVariable("stopFlag", $true)
-            Start-Sleep -Milliseconds 500
-            if ($monitorPS) { $monitorPS.Stop(); $monitorPS.Dispose() }
-            $monitorRunspace.Close()
-            $monitorRunspace.Dispose()
+            $qosText.Text = ($lines -join "`n")
+        } else {
+            $qosText.Text = "无 NetOpt QoS 策略"
         }
-        Add-LogEntry "INFO" "带宽监控已停止"
+    } catch {
+        $qosText.Text = "无法读取 QoS 策略: $($_.Exception.Message)"
     }
-})
-
-# Run Diagnostic
-$window.FindName("BtnRunDiag").Add_Click({
-    $diagText = $window.FindName("DiagResults")
-    $diagText.Text = "Running diagnostics..."
-    $btn = $window.FindName("BtnRunDiag")
-    $btn.IsEnabled = $false
-
-    $runspace = [RunspaceFactory]::CreateRunspace()
-    $runspace.ApartmentState = "STA"
-    $runspace.Open()
-    $runspace.SessionStateProxy.SetVariable("window", $window)
-
-    $ps = [PowerShell]::Create()
-    $ps.Runspace = $runspace
-    $ps.AddScript({
-        $diagText = $window.FindName("DiagResults")
-        $sb = [System.Text.StringBuilder]::new()
-
-        $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
-        if ($adapter) {
-            [void]$sb.AppendLine("=== Adapter ===")
-            [void]$sb.AppendLine("名称: $($adapter.Name)")
-            [void]$sb.AppendLine("描述: $($adapter.InterfaceDescription)")
-            [void]$sb.AppendLine("连接速度: $($adapter.LinkSpeed)")
-            [void]$sb.AppendLine("MTU: $($adapter.MtuSize)")
-            [void]$sb.AppendLine("")
-
-            $ip = (Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress
-            $gw = (Get-NetRoute -InterfaceIndex $adapter.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop
-            $dns = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses -join ', '
-
-            [void]$sb.AppendLine("=== Network ===")
-            [void]$sb.AppendLine("IP 地址: $ip")
-            [void]$sb.AppendLine("网关: $gw")
-            [void]$sb.AppendLine("DNS: $dns")
-            [void]$sb.AppendLine("")
-
-            if ($gw) {
-                $window.Dispatcher.Invoke([Action]{ $diagText.Text = "Pinging gateway..." })
-                $pingResult = & { ping -n 5 $gw }
-                $avg = -1
-                foreach ($l in $pingResult) {
-                    if ($l -match "Average = (\d+)" -or $l -match "平均 = (\d+)") { $avg = [int]$Matches[1] }
-                }
-                [void]$sb.AppendLine("=== Ping (gateway) ===")
-                [void]$sb.AppendLine("平均延迟: $avg ms")
-                [void]$sb.AppendLine("")
-
-                # Jitter
-                $pings = @()
-                foreach ($i in 1..5) {
-                    $pr = & { ping -n 1 $gw }
-                    foreach ($l in $pr) {
-                        if ($l -match "time[<=](\d+)" -or $l -match "时间[<=](\d+)") { $pings += [double]$Matches[1] }
-                    }
-                    Start-Sleep -Milliseconds 200
-                }
-                if ($pings.Count -gt 1) {
-                    $jitter = 0
-                    for ($i = 1; $i -lt $pings.Count; $i++) { $jitter += [math]::Abs($pings[$i] - $pings[$i-1]) }
-                    $jitter = [math]::Round($jitter / ($pings.Count - 1), 1)
-                    [void]$sb.AppendLine("抖动: $jitter ms")
-                }
-            }
-        }
-
-        [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("=== TCP 全局设置 ===")
-        $tcpOut = & { netsh interface tcp show global }
-        foreach ($l in $tcpOut) { [void]$sb.AppendLine($l) }
-
-        [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("=== 注册表 TCP 参数 (IPv4) ===")
-        $tcpPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
-        $props = Get-ItemProperty $tcpPath -ErrorAction SilentlyContinue
-        foreach ($p in @("TcpNoDelay","EnableTCPNoDelay","TcpAckFrequency","TcpDelAckTicks","Tcp1323Opts","SackOpts","EnableTCPChimney","DefaultSendWindow","DefaultReceiveWindow","MaxUserPort","TcpTimedWaitDelay","KeepAliveTime","DefaultTTL")) {
-            $val = $props.$p
-            if ($null -eq $val) { $val = "(default)" }
-            [void]$sb.AppendLine("$p = $val")
-        }
-
-        [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("=== 注册表 TCP 参数 (IPv6) ===")
-        $tcpPathV6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
-        $propsV6 = Get-ItemProperty $tcpPathV6 -ErrorAction SilentlyContinue
-        foreach ($p in @("EnableTCPNoDelay","TcpDelAckTicks","Tcp1323Opts","SackOpts","EnableTCPChimney","MaxUserPort","TcpTimedWaitDelay","KeepAliveTime")) {
-            $val = $propsV6.$p
-            if ($null -eq $val) { $val = "(default)" }
-            [void]$sb.AppendLine("$p = $val")
-        }
-
-        [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("=== 系统配置 ===")
-        $spPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-        $sp = Get-ItemProperty $spPath -ErrorAction SilentlyContinue
-        [void]$sb.AppendLine("NetworkThrottlingIndex = $($sp.NetworkThrottlingIndex)")
-        [void]$sb.AppendLine("SystemResponsiveness = $($sp.SystemResponsiveness)")
-
-        $window.Dispatcher.Invoke([Action]{
-            $diagText.Text = $sb.ToString()
-            $window.FindName("BtnRunDiag").IsEnabled = $true
-        })
-    }) | Out-Null
-
-    $handle = $ps.BeginInvoke()
-    Register-ObjectEvent -InputObject $ps -EventName InvocationStateChanged -Action {
-        if ($ps.InvocationStateInfo.State -eq "Completed") {
-            $ps.Dispose()
-            $runspace.Close()
-            $runspace.Dispose()
-        }
-    } | Out-Null
-
-    Add-LogEntry "INFO" "诊断已开始"
-})
-
-# Export log
+}
+$window.FindName("BtnRefreshQoS").Add_Click({ BtnRefreshQoS_Click $args[0] $args[1] })
 $window.FindName("BtnExportLog").Add_Click({
     $saveDlg = New-Object Microsoft.Win32.SaveFileDialog
     $saveDlg.Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*"
@@ -5063,52 +5683,54 @@ $window.FindName("BtnExportLog").Add_Click({
         }
     }
 })
-
-# Clear log
 $window.FindName("BtnClearLog").Add_Click({
     $window.FindName("LogList").Items.Clear()
 })
-
-# ============================================================
-# Show Window
-# ============================================================
-# 调试日志
-$debugLog = Join-Path $env:ProgramData "ALitNetworkOptimizer\debug.log"
+$debugLog = Join-Path "C:\ProgramData" "ALitNetworkOptimizer\debug.log"
 function Write-DebugLog($msg) {
-    try { Add-Content $debugLog "[$(Get-Date -Format 'HH:mm:ss.fff')] $msg" -ErrorAction SilentlyContinue } catch {}
+    try {
+        $dir = Split-Path $debugLog -Parent
+        if (-not (Test-Path $dir)) { return }
+        $ts = Get-Date -Format 'HH:mm:ss.fff'
+        $line = "[$ts] $msg"
+        $escapedLine = $line -replace '"','\"'
+        $p = New-Object System.Diagnostics.Process
+        $p.StartInfo.FileName = "cmd.exe"
+        $p.StartInfo.Arguments = "/c echo $escapedLine >> `"$debugLog`""
+        $p.StartInfo.UseShellExecute = $false
+        $p.StartInfo.CreateNoWindow = $true
+        $p.Start() | Out-Null
+        $p.WaitForExit(1000) | Out-Null
+    } catch {}
 }
-Write-DebugLog "=== 启动 ==="
-Write-DebugLog "window is null: $($null -eq $window)"
-if ($window) { Write-DebugLog "window type: $($window.GetType().Name)" }
-
-# 关闭加载页面
+try { Write-DebugLog "=== 启动 ===" } catch {}
+try { Write-DebugLog "window is null: $($null -eq $window)" } catch {}
+if ($window) { try { Write-DebugLog "window type: $($window.GetType().Name)" } catch {} }
 Update-SplashText "正在启动..."
 Start-Sleep -Milliseconds 200
 try {
     $script:splashTimer.Stop()
     $splashWindow.Close()
 } catch {}
-
 try {
-    # 窗口关闭时清理 WinDivert 进程
     $window.Add_Closing({
         if ($script:wdProcess -and -not $script:wdProcess.HasExited) {
             try { $script:wdProcess.Kill() } catch {}
         }
+        if ($script:hypoMuxProcess -and -not $script:hypoMuxProcess.HasExited) {
+            try { Stop-Process -Id $script:hypoMuxProcess.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
     })
-    Write-DebugLog "准备 ShowDialog, window null=$($null -eq $window)"
+    try { Write-DebugLog "准备 ShowDialog, window null=$($null -eq $window)" } catch {}
     $window.ShowDialog() | Out-Null
-    Write-DebugLog "ShowDialog 正常结束"
+    try { Write-DebugLog "ShowDialog 正常结束" } catch {}
 } catch {
-    Write-DebugLog "ShowDialog 异常: $($_.Exception.Message)"
-    Write-DebugLog "异常类型: $($_.Exception.GetType().Name)"
-    Write-DebugLog "ScriptStackTrace: $($_.ScriptStackTrace)"
-    # 捕获 ShowDialog 可能的 Runspace 作用域异常，确保不会白屏崩溃
+    try { Write-DebugLog "ShowDialog 异常: $($_.Exception.Message)" } catch {}
+    try { Write-DebugLog "异常类型: $($_.Exception.GetType().Name)" } catch {}
+    try { Write-DebugLog "ScriptStackTrace: $($_.ScriptStackTrace)" } catch {}
     try { Add-LogEntry "ERROR" "ShowDialog 异常：$($_.Exception.Message)" } catch {}
     try { [System.Windows.MessageBox]::Show("窗口显示异常，请重启程序。`n`n错误：$($_.Exception.Message)", "错误", "OK", "Error") | Out-Null } catch {}
 }
-
-# 窗口关闭后清理后台资源
 try {
     if ($script:autoSysTimer) { $script:autoSysTimer.Stop() }
     if ($script:sysTimer) { $script:sysTimer.Stop() }
