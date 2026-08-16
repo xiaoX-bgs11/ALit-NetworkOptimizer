@@ -1,0 +1,392 @@
+<Window
+    x:Class="NetworkOptimizer.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NetworkOptimizer"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    Title="Network Optimizer v2 - Minecraft PvP & Local Network"
+    Width="1100" Height="720">
+
+    <Grid Background="#1A1A2E">
+        <NavigationView
+            x:Name="NavView"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            OpenPaneLength="200"
+            Background="#16213E"
+            SelectionChanged="NavView_SelectionChanged"
+            PaneBackground="#16213E">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Tag="Dashboard" Content="Dashboard" Icon="Home"/>
+                <NavigationViewItem Tag="Tcp" Content="TCP/IP" Icon="Network"/>
+                <NavigationViewItem Tag="Dns" Content="DNS" Icon="Globe"/>
+                <NavigationViewItem Tag="Qos" Content="QoS" Icon="Star"/>
+                <NavigationViewItem Tag="Adapter" Content="Adapter" Icon="View"/>
+                <NavigationViewItem Tag="Diag" Content="Diagnostics" Icon="Repair"/>
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Tag="Profiles" Content="Profiles" Icon="Save"/>
+                <NavigationViewItem Tag="Log" Content="Log" Icon="Document"/>
+            </NavigationView.FooterMenuItems>
+
+            <Grid Margin="16,8,16,16">
+                <!-- ============ Dashboard ============ -->
+                <ScrollViewer x:Name="DashboardPanel" Visibility="Visible">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Dashboard" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <TextBlock Text="Network status overview and quick optimization" FontSize="13" Foreground="#9E9E9E"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#0F3460" CornerRadius="6" Padding="12,6" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="#FFB74D"/>
+                                    <TextBlock x:Name="StatusBadge" Text="Not Optimized" Foreground="#E0E0E0" FontSize="13"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="#0F3460" CornerRadius="8" Padding="16" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <TextBlock Text="PING" FontSize="12" Foreground="#9E9E9E"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="PingValue" Text="--" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                        <TextBlock Text=" ms" FontSize="14" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="#0F3460" CornerRadius="8" Padding="16" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <TextBlock Text="DOWNLOAD" FontSize="12" Foreground="#9E9E9E"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="DownloadValue" Text="--" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                        <TextBlock Text=" Mbps" FontSize="14" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="#0F3460" CornerRadius="8" Padding="16" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <TextBlock Text="UPLOAD" FontSize="12" Foreground="#9E9E9E"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="UploadValue" Text="--" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                        <TextBlock Text=" Mbps" FontSize="14" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Background="#0F3460" CornerRadius="8" Padding="16">
+                                <StackPanel>
+                                    <TextBlock Text="DNS LATENCY" FontSize="12" Foreground="#9E9E9E"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="DnsValue" Text="--" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                        <TextBlock Text=" ms" FontSize="14" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="#16213E" CornerRadius="8" Padding="20" Margin="0,0,8,0">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Quick Optimize" FontSize="16" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <TextBlock Text="One-click apply all optimizations for Minecraft PvP. Includes TCP tuning, QoS priority, DNS, and adapter settings." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                                    <ComboBox x:Name="InterfaceSelector" Header="Network Interface" PlaceholderText="Select interface" MinWidth="280" Margin="0,4,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                        <Button x:Name="QuickOptimizeButton" Content="Optimize Now" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="24,10" Click="QuickOptimize_Click"/>
+                                        <Button x:Name="RevertAllButton" Content="Revert All" Background="#EF5350" Foreground="White" CornerRadius="6" Padding="24,10" FontWeight="SemiBold" Click="RevertAll_Click"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="OptimizeProgressPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed" Margin="0,4,0,0">
+                                        <ProgressRing x:Name="OptimizeProgress" IsActive="True" Width="24" Height="24"/>
+                                        <TextBlock x:Name="OptimizeProgressText" Text="Working..." Foreground="#9E9E9E" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="#16213E" CornerRadius="8" Padding="20">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Speed Test" FontSize="16" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <TextBlock Text="Run a comprehensive network speed test. Measures download, upload, and latency." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                        <Button x:Name="SpeedTestButton" Content="Start Test" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="24,10" Click="SpeedTest_Click"/>
+                                        <Button x:Name="RefreshStatusButton" Content="Refresh Status" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="6" Padding="16,10" Click="RefreshStatus_Click"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="SpeedTestProgressPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed" Margin="0,4,0,0">
+                                        <ProgressRing IsActive="True" Width="24" Height="24"/>
+                                        <TextBlock x:Name="SpeedTestProgressText" Text="Testing..." Foreground="#9E9E9E" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="SpeedTestResults" Spacing="4" Margin="0,8,0,0" Visibility="Collapsed">
+                                        <TextBlock x:Name="TestPingLabel" Foreground="#E0E0E0" FontSize="13"/>
+                                        <TextBlock x:Name="TestDownloadLabel" Foreground="#E0E0E0" FontSize="13"/>
+                                        <TextBlock x:Name="TestUploadLabel" Foreground="#E0E0E0" FontSize="13"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="#16213E" CornerRadius="8" Padding="20">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Activity Summary" FontSize="16" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <StackPanel x:Name="ActiveOptList" Spacing="4" MaxHeight="200"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ TCP/IP ============ -->
+                <ScrollViewer x:Name="TcpPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="TCP/IP Stack Optimization" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Fine-tune the Windows TCP/IP stack for lower latency and higher throughput. All settings are documented Microsoft parameters." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ComboBox x:Name="TcpLevelSelector" Header="Optimization Level" MinWidth="200" SelectedIndex="0">
+                                <x:String>Gaming (PvP)</x:String>
+                                <x:String>Balanced</x:String>
+                                <x:String>Bandwidth</x:String>
+                            </ComboBox>
+                            <Button x:Name="ApplyTcpButton" Content="Apply All" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="20,10" Click="ApplyTcp_Click" VerticalAlignment="Bottom"/>
+                            <Button x:Name="RevertTcpButton" Content="Revert All" Background="#EF5350" Foreground="White" CornerRadius="6" Padding="20,10" FontWeight="SemiBold" Click="RevertTcp_Click" VerticalAlignment="Bottom"/>
+                        </StackPanel>
+                        <ProgressBar x:Name="TcpProgress" Visibility="Collapsed" Minimum="0" Maximum="100"/>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Current TCP Global Settings" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <Button x:Name="RefreshTcpButton" Content="Refresh" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="4" Padding="12,4" FontSize="12" Click="RefreshTcp_Click"/>
+                                </StackPanel>
+                                <TextBlock x:Name="TcpSettingsText" Text="Click Refresh to load..." FontFamily="Consolas" FontSize="12" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Optimization Items" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <StackPanel x:Name="TcpItemsList" Spacing="8"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ DNS ============ -->
+                <ScrollViewer x:Name="DnsPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="DNS Optimization" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Configure DNS servers for faster domain resolution and lower latency." FontSize="13" Foreground="#9E9E9E"/>
+                        </StackPanel>
+                        <ComboBox x:Name="DnsInterfaceSelector" Header="Network Interface" PlaceholderText="Select interface" MinWidth="350"/>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Current DNS Servers" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <TextBlock x:Name="CurrentDnsText" Text="--" FontFamily="Consolas" FontSize="13" Foreground="#E0E0E0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="DNS Presets" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <StackPanel x:Name="DnsPresetList" Spacing="6"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button x:Name="ApplyDnsButton" Content="Apply Selected" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="16,10" Click="ApplyDns_Click"/>
+                                    <Button x:Name="RestoreDnsButton" Content="Restore DHCP" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="6" Padding="16,10" Click="RestoreDns_Click"/>
+                                    <Button x:Name="FlushDnsButton" Content="Flush Cache" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="6" Padding="16,10" Click="FlushDns_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="DNS Benchmark" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <Button x:Name="BenchmarkDnsButton" Content="Run Benchmark" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="12,4" FontSize="12" Click="BenchmarkDns_Click"/>
+                                </StackPanel>
+                                <StackPanel x:Name="DnsBenchmarkResults" Spacing="4"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ QoS ============ -->
+                <ScrollViewer x:Name="QosPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="QoS - Traffic Prioritization" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Create Quality of Service policies to prioritize Minecraft game traffic over other network activity." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Border Background="#16213E" CornerRadius="8" Padding="20">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Minecraft PvP QoS Presets" FontSize="16" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <TextBlock Text="Creates DSCP 46 (Expedited Forwarding) policies for Minecraft Java, Bedrock, and their default ports." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                                <StackPanel x:Name="QoSPresetList" Spacing="6"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button x:Name="ApplyQoSButton" Content="Apply QoS Policies" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="16,10" Click="ApplyQoS_Click"/>
+                                    <Button x:Name="RemoveQoSButton" Content="Remove All Policies" Background="#EF5350" Foreground="White" CornerRadius="6" Padding="16,10" FontWeight="SemiBold" Click="RemoveQoS_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Active QoS Policies" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <Button x:Name="RefreshQoSButton" Content="Refresh" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="4" Padding="12,4" FontSize="12" Click="RefreshQoS_Click"/>
+                                </StackPanel>
+                                <TextBlock x:Name="QoSPolicyText" Text="--" FontFamily="Consolas" FontSize="12" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ Adapter ============ -->
+                <ScrollViewer x:Name="AdapterPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="Network Adapter Optimization" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Configure hardware-level adapter settings for optimal gaming performance." FontSize="13" Foreground="#9E9E9E"/>
+                        </StackPanel>
+                        <ComboBox x:Name="AdapterSelector" Header="Select Adapter" PlaceholderText="Select adapter" MinWidth="350" SelectionChanged="AdapterSelector_SelectionChanged"/>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Adapter Information" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <StackPanel x:Name="AdapterInfoList" Spacing="4"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Gaming Optimizations" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <TextBlock Text="Disables power management, increases buffers, enables RSS, disables LSO and interrupt moderation for lower latency." FontSize="13" Foreground="#9E9E9E" TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button x:Name="OptimizeAdapterButton" Content="Optimize Adapter" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="16,10" Click="OptimizeAdapter_Click"/>
+                                    <Button x:Name="RevertAdapterButton" Content="Revert Adapter" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="6" Padding="16,10" Click="RevertAdapter_Click"/>
+                                </StackPanel>
+                                <ProgressBar x:Name="AdapterProgress" Visibility="Collapsed" Minimum="0" Maximum="100"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ Diagnostics ============ -->
+                <ScrollViewer x:Name="DiagPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="Network Diagnostics" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Real-time bandwidth monitoring and detailed network analysis." FontSize="13" Foreground="#9E9E9E"/>
+                        </StackPanel>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Real-time Bandwidth" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                    <ToggleSwitch x:Name="MonitorToggle" Grid.Column="1" Toggled="MonitorToggle_Toggled" OffContent="Off" OnContent="On"/>
+                                </Grid>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Background="#0F3460" CornerRadius="6" Padding="12" Margin="0,0,4,0">
+                                        <StackPanel>
+                                            <TextBlock Text="Download" FontSize="12" Foreground="#9E9E9E"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="RealtimeDownload" Text="0.0" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                                <TextBlock Text=" Mbps" FontSize="12" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                                            </StackPanel>
+                                            <ProgressBar x:Name="DownloadBar" Maximum="1000" Value="0" Foreground="#00E676" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Background="#0F3460" CornerRadius="6" Padding="12" Margin="4,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="Upload" FontSize="12" Foreground="#9E9E9E"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="RealtimeUpload" Text="0.0" FontSize="28" FontWeight="Bold" Foreground="#00E676"/>
+                                                <TextBlock Text=" Mbps" FontSize="12" Foreground="#9E9E9E" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                                            </StackPanel>
+                                            <ProgressBar x:Name="UploadBar" Maximum="1000" Value="0" Foreground="#FFB74D" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Full Diagnostic" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                                    <Button x:Name="RunDiagnosticButton" Content="Run Diagnostic" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="12,4" FontSize="12" Click="RunDiagnostic_Click"/>
+                                </StackPanel>
+                                <ProgressBar x:Name="DiagProgress" Visibility="Collapsed"/>
+                                <StackPanel x:Name="DiagResultsList" Spacing="4"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ Profiles ============ -->
+                <ScrollViewer x:Name="ProfilesPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <StackPanel>
+                            <TextBlock Text="Optimization Profiles" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <TextBlock Text="Save and restore optimization configurations." FontSize="13" Foreground="#9E9E9E"/>
+                        </StackPanel>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Saved Profiles" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <StackPanel x:Name="ProfileList" Spacing="4"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button x:Name="LoadProfileButton" Content="Load Selected" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="16,10" Click="LoadProfile_Click"/>
+                                    <Button x:Name="DeleteProfileButton" Content="Delete Selected" Background="#EF5350" Foreground="White" CornerRadius="6" Padding="16,10" FontWeight="SemiBold" Click="DeleteProfile_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#16213E" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Save Current Profile" FontSize="14" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                                <TextBox x:Name="ProfileNameInput" Header="Profile Name" PlaceholderText="My PvP Config" MinWidth="350"/>
+                                <TextBox x:Name="ProfileDescInput" Header="Description" PlaceholderText="Description (optional)" MinWidth="350" Margin="0,4,0,0"/>
+                                <ComboBox x:Name="ProfileLevelSelector" Header="Level" MinWidth="200" SelectedIndex="0" Margin="0,4,0,0">
+                                    <x:String>Gaming</x:String>
+                                    <x:String>Balanced</x:String>
+                                    <x:String>Bandwidth</x:String>
+                                </ComboBox>
+                                <Button x:Name="SaveProfileButton" Content="Save Profile" Background="#00E676" Foreground="#1A1A2E" FontWeight="SemiBold" CornerRadius="6" Padding="16,10" Click="SaveProfile_Click" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============ Log ============ -->
+                <ScrollViewer x:Name="LogPanel" Visibility="Collapsed">
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Activity Log" FontSize="20" FontWeight="SemiBold" Foreground="#E0E0E0"/>
+                            <Button Grid.Column="1" x:Name="ClearLogButton" Content="Clear" Background="#0F3460" Foreground="#E0E0E0" CornerRadius="4" Padding="12,4" FontSize="12" Click="ClearLog_Click"/>
+                        </Grid>
+                        <Border Background="#16213E" CornerRadius="8" Padding="12">
+                            <StackPanel x:Name="LogList" Spacing="2" MaxHeight="450"/>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>
